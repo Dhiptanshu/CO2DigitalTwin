@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>India CO₂ Dashboard</title>
+
+<link href="https://cdn.jsdelivr.net/npm/cesium@1.125/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0B1120">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+<!-- External stylesheet -->
+<link rel="stylesheet" href="styles.css">
+
+<script src="https://cdn.jsdelivr.net/npm/cesium@1.125/Build/Cesium/Cesium.js"></script>
+<script src="https://cdn.plot.ly/plotly-2.26.2.min.js"></script>
+</head>
+
+<body>
+
+<header>
+  <div class="title-block">
+    <h1><span class="dot"></span> India CO₂ Monitoring &amp; Planning Tool</h1>
+    <small>Interactive national view for CO₂ planning and interventions</small>
+  </div>
+  <span class="tag">Live Scenario Sandbox</span>
+</header>
+
+<div id="main">
+  <div id="controls">
+    <h3>Intervention Settings</h3>
+    <p class="sub">Configure city, station & efficiency to simulate impact.</p>
+
+    <div class="chip-row">
+      <span class="chip">Real-time Map</span>
+      <span class="chip">Urban Planning</span>
+    </div>
+
+    <label for="citySelect">Select City</label>
+    <select id="citySelect"></select>
+
+    <label for="stationSelect">Choose Station</label>
+    <select id="stationSelect"></select>
+
+    <label for="methodSelect">Select Intervention</label>
+    <select id="methodSelect">
+      <option>Roadside Capture Unit</option>
+      <option>Vertical Garden</option>
+      <option>Biofilter</option>
+    </select>
+
+    <label for="reductionInput">Efficiency (%)</label>
+    <input type="number" id="reductionInput" value="20" min="0" max="50">
+
+    <button id="applyBtn">Apply Intervention</button>
+  </div>
+
+  <div id="dashboard">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-header-title">3D National Context</div>
+        <div class="card-header-meta">Cesium terrain · CO₂ hotspots</div>
+      </div>
+
+      <div id="cesiumContainer"></div>
+
+      <!-- Legend -->
+      <div class="legend">
+        <div class="legend-item"><span class="legend-color legend-low"></span> ≤420 ppm</div>
+        <div class="legend-item"><span class="legend-color legend-mid"></span> 421–450 ppm</div>
+        <div class="legend-item"><span class="legend-color legend-high"></span> >450 ppm</div>
+        <div class="legend-item"><span class="legend-color legend-na"></span> No data</div>
+      </div>
+    </div>
+
+    <div id="charts">
+      <div class="card">
+        <div class="card-inner-header">
+          <div class="card-inner-title">Station Snapshot</div>
+          <span class="pill">Tabular View</span>
+        </div>
+        <div id="table"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-inner-header">
+          <div class="card-inner-title">CO₂ Levels</div>
+          <span class="pill">Bar Chart</span>
+        </div>
+        <div id="barChart"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJiNjFjNDkyOS1hZmZlLTQ0YmUtODViOS1lZDUxMDExYWIwZTciLCJpZCI6MzQ2Mjc4LCJpYXQiOjE3NTkzMTY3NDd9.awxOsdnDLokLuS9p-NWVaIJSGk8u5r46bjxz1jh2pi8';
+
+let stations = [];
+let viewer;
+
+// Base URL for API calls
+const BASE_URL = window.location.origin;
+
+// Dropdowns
+const citySelect = document.getElementById('citySelect');
+const stationSelect = document.getElementById('stationSelect');
+const methodSelect = document.getElementById('methodSelect');
+const reductionInput = document.getElementById('reductionInput');
+
+// Frontend copy of LULC factor mapping (for suggestion only)
+const LULC_FACTORS = {
+  "Urban": 2.0,
+  "Industrial": 2.5,
+  "Residential": 1.8,
+  "Campus": 1.5,
+  "Rural": 1.0,
+  "Mixed Urban": 2.0,
+  "Industrial/Residential": 2.2,
+  "Urban Vegetation": 1.3,
+  "Airport": 2.5,
+  "Sports Complex": 1.5,
+  "Government": 1.8,
+  "Mixed Forest": 1.0
+};
+
+// Compute a recommended efficiency (%) for the selected station + method
+function autoSuggestEfficiency(station, method) {
+  if (!station || station.co2 === undefined || isNaN(station.co2)) {
+    return 20; // safe fallback
+  }
+
+  const co2 = station.co2;
+
+  // CO₂ severity bands
+  let severity = 0; // low
+  if (co2 >= 430 && co2 <= 450) severity = 1;       // medium
+  else if (co2 > 450) severity = 2;                 // high
+
+  const ndvi = (typeof station.ndvi === "number" && !isNaN(station.ndvi))
+    ? Math.max(0, Math.min(station.ndvi, 1))
+    : 0.3; // assume slightly vegetated if unknown
+
+  const lulcFactor = LULC_FACTORS[station.lulc] || 1.5;
+
+  // Method-specific boost: engineered units get higher "intensity"
+  let methodBoost = 0;
+  if (method === "Roadside Capture Unit") methodBoost = 8;
+  else if (method === "Biofilter") methodBoost = 6;
+  else if (method === "Vertical Garden") methodBoost = 4;
+
+  // Heuristic:
+  // - higher CO₂ → higher efficiency
+  // - lower NDVI (less greenery) → higher efficiency
+  // - more urban (higher LULC factor) → higher efficiency
+  let eff =
+    10 +                     // base
+    severity * 8 +           // CO₂ severity contribution
+    (1 - ndvi) * 10 +        // less greenery → higher
+    (lulcFactor - 1) * 4 +   // more urban → higher
+    methodBoost;             // chosen technology
+
+  // Clamp to 5–50 and round
+  eff = Math.round(Math.max(5, Math.min(50, eff)));
+  return eff;
+}
+
+function updateEfficiencySuggestion() {
+  const stationName = stationSelect.value;
+  if (!stationName) return;
+  const station = stations.find(s => s.name === stationName);
+  const method = methodSelect.value;
+  const suggested = autoSuggestEfficiency(station, method);
+  reductionInput.value = suggested;
+}
+
+async function fetchStations(){
+    const res = await fetch(`${BASE_URL}/get_stations`);
+    stations = await res.json();
+
+    if(citySelect.options.length === 0){
+        const cities = [...new Set(stations.map(s=>s.city))];
+        citySelect.innerHTML = ""; 
+
+        citySelect.add(new Option("City", "", true, true));
+        citySelect.options[0].disabled = true;
+
+        cities.forEach(c => citySelect.add(new Option(c, c)));
+
+        stationSelect.innerHTML = "";
+        stationSelect.add(new Option("Station", "", true, true));
+        stationSelect.options[0].disabled = true;
+
+        drawEntities();
+    }
+
+    updateStations();
+    drawEntities();
+}
+
+function updateStations(){
+    const city = citySelect.value;
+    const filtered = stations.filter(s=>s.city === city);
+
+    stationSelect.innerHTML = "";
+    stationSelect.add(new Option("Station", "", true, true));
+    stationSelect.options[0].disabled = true;
+
+    filtered.forEach(s=>stationSelect.add(new Option(s.name, s.name)));
+
+    // When city changes and a station is later selected, efficiency will be suggested
+}
+
+citySelect.onchange = () => { 
+  updateStations(); 
+  drawEntities(); 
+};
+
+stationSelect.onchange = () => {
+  drawEntities();
+  updateEfficiencySuggestion();
+};
+
+methodSelect.onchange = () => {
+  updateEfficiencySuggestion();
+};
+
+async function initCesium(){
+    viewer = new Cesium.Viewer('cesiumContainer',{
+        terrainProvider: await Cesium.CesiumTerrainProvider.fromIonAssetId(1),
+        imageryProvider: new Cesium.IonImageryProvider({assetId:2}),
+        timeline:false, animation:false, infoBox:false, selectionIndicator:false
+    });
+    viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(78.9629, 20.5937, 2500000)
+    });
+}
+
+function getColor(co2){
+    if(co2 === undefined || isNaN(co2)) return Cesium.Color.GRAY;
+    if(co2 <= 420) return Cesium.Color.fromBytes(34, 197, 94);       // green
+    else if(co2 <= 450) return Cesium.Color.fromBytes(251, 191, 36); // amber
+    else return Cesium.Color.fromBytes(248, 113, 113);               // red
+}
+
+function drawEntities(){
+    if(!viewer) return;
+    viewer.entities.removeAll();
+
+    const city = citySelect.value;
+    const filtered = stations.filter(s => s.city === city 
+                                         && s.lat !== undefined && !isNaN(s.lat)
+                                         && s.lon !== undefined && !isNaN(s.lon)
+                                         && s.co2 !== undefined && !isNaN(s.co2));
+
+    filtered.forEach(s=>{
+        viewer.entities.add({
+            name: `${s.name}`,
+            position: Cesium.Cartesian3.fromDegrees(s.lon, s.lat, 0),
+            point: { 
+              pixelSize: 15, 
+              color: getColor(s.co2), 
+              outlineColor: Cesium.Color.WHITE, 
+              outlineWidth: 2 
+            },
+            label: { 
+              text: s.name, 
+              font: "14px 'Segoe UI', sans-serif", 
+              fillColor: Cesium.Color.WHITE, 
+              style: Cesium.LabelStyle.FILL_AND_OUTLINE, 
+              outlineWidth: 2, 
+              verticalOrigin: Cesium.VerticalOrigin.BOTTOM, 
+              pixelOffset: new Cesium.Cartesian2(0, -20) 
+            },
+            description: `<b>Station:</b> ${s.name}<br><b>City:</b> ${s.city}<br><b>State:</b> ${s.state}<br><b>CO₂:</b> ${s.co2} ppm<br><b>Coordinates:</b> ${s.lat}, ${s.lon}`
+        });
+    });
+
+    if(filtered.length > 0) viewer.zoomTo(viewer.entities);
+    drawTable(filtered);
+    drawChart(filtered);
+}
+
+function drawTable(data){
+    let html = "<table><thead><tr><th>Station</th><th>City</th><th>State</th><th>CO₂ ppm</th></tr></thead><tbody>";
+    data.forEach(s => {
+        const co2Val = s.co2 ?? "N/A";
+        html += `<tr><td>${s.name}</td><td>${s.city}</td><td>${s.state}</td><td>${co2Val}</td></tr>`;
+    });
+    html += "</tbody></table>";
+    document.getElementById('table').innerHTML = html;
+}
+
+function drawChart(data){
+    const filtered = data.filter(s => s.co2 !== undefined && !isNaN(s.co2));
+
+    const barColors = filtered.map(s => {
+        const c = getColor(s.co2);
+        const v = c.toBytes();
+        return `rgba(${v[0]},${v[1]},${v[2]},0.9)`;
+    });
+
+    const trace = { 
+        x: filtered.map(s => s.name), 
+        y: filtered.map(s => s.co2), 
+        type:'bar', 
+        marker:{ 
+          color: barColors,
+          line: { width: 1, color: 'rgba(15,23,42,1)' }
+        },
+        hovertemplate: "<b>%{x}</b><br>CO₂: %{y} ppm<extra></extra>"
+    };
+
+    const layout = {
+        title: {
+          text: `CO₂ Levels (${citySelect.value || "Select a City"})`,
+          font: { size: 14, color: '#e5e7eb' },
+          x: 0.02,
+          y: 0.97
+        },
+        margin:{t:40,l:40,r:20,b:80},
+        paper_bgcolor: 'rgba(15,23,42,0)',
+        plot_bgcolor: 'rgba(15,23,42,0.85)',
+        xaxis: {
+          tickangle: -40,
+          tickfont: { size: 10, color: '#9ca3af' },
+          gridcolor: 'rgba(55,65,81,0.6)',
+          zerolinecolor: 'rgba(55,65,81,0.8)'
+        },
+        yaxis: {
+          title: 'ppm',
+          titlefont: { size: 11, color: '#9ca3af' },
+          tickfont: { size: 10, color: '#9ca3af' },
+          gridcolor: 'rgba(55,65,81,0.6)'
+        },
+        hoverlabel: {
+          bgcolor: '#020617',
+          bordercolor: '#38bdf8',
+          font: { color: '#e5e7eb' }
+        },
+        transition: {
+          duration: 400,
+          easing: 'cubic-in-out'
+        }
+    };
+
+    // Smooth update on every redraw (e.g. after intervention)
+    Plotly.react('barChart',[trace],layout,{responsive:true, displaylogo:false});
+}
+
+document.getElementById('applyBtn').onclick = async () => {
+    const stationName = stationSelect.value;
+    const efficiency = parseFloat(reductionInput.value);
+
+    if(!stationName || isNaN(efficiency)) return alert("Select a station and enter a valid reduction.");
+
+    const res = await fetch(`${BASE_URL}/apply_intervention`, {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({station: stationName, efficiency: efficiency})
+    });
+
+    const result = await res.json();
+    if(result.success){
+        stations = stations.map(s => s.name === stationName ? {...s, co2: result.co2_after} : s);
+        drawEntities();
+    } else {
+        alert("Error applying intervention: " + result.error);
+    }
+}
+
+window.onload = async () => {
+    await initCesium();
+    await fetchStations();
+}
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./service-worker.js")
+      .then(reg => console.log("Service Worker registered:", reg))
+      .catch(err => console.log("SW registration failed:", err));
+  });
+}
+</script>
+
+
+</body>
+</html>
