@@ -56,41 +56,75 @@
   </div>
 
   <div id="dashboard">
-    <div class="card">
-      <div class="card-header">
-        <div class="card-header-title">3D National Context</div>
-        <div class="card-header-meta">Cesium terrain · CO₂ hotspots</div>
-      </div>
-
-      <div id="cesiumContainer"></div>
-
-      <!-- Legend -->
-      <div class="legend">
-        <div class="legend-item"><span class="legend-color legend-low"></span> ≤420 ppm</div>
-        <div class="legend-item"><span class="legend-color legend-mid"></span> 421–450 ppm</div>
-        <div class="legend-item"><span class="legend-color legend-high"></span> >450 ppm</div>
-        <div class="legend-item"><span class="legend-color legend-na"></span> No data</div>
-      </div>
+  <div class="card">
+    <div class="card-header">
+      <div class="card-header-title">3D National Context</div>
+      <div class="card-header-meta">Cesium terrain · CO₂ hotspots</div>
     </div>
 
-    <div id="charts">
-      <div class="card">
-        <div class="card-inner-header">
-          <div class="card-inner-title">Station Snapshot</div>
-          <span class="pill">Tabular View</span>
-        </div>
-        <div id="table"></div>
+    <div id="cesiumContainer"></div>
+
+    <!-- Legend -->
+    <div class="legend">
+      <div class="legend-item"><span class="legend-color legend-low"></span> ≤420 ppm</div>
+      <div class="legend-item"><span class="legend-color legend-mid"></span> 421–450 ppm</div>
+      <div class="legend-item"><span class="legend-color legend-high"></span> >450 ppm</div>
+      <div class="legend-item"><span class="legend-color legend-na"></span> No data</div>
+    </div>
+  </div>
+
+  <!-- NEW DECISION-SUPPORT SUMMARY CARD -->
+  <div class="card" id="summaryCard">
+    <div class="card-inner-header">
+      <div class="card-inner-title">Decision Support Overview</div>
+      <span class="pill">City Snapshot</span>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-label">Selected City</div>
+        <div class="kpi-value" id="kpiCity">–</div>
+        <div class="kpi-sub" id="kpiStations">0 monitoring stations</div>
       </div>
 
-      <div class="card">
-        <div class="card-inner-header">
-          <div class="card-inner-title">CO₂ Levels</div>
-          <span class="pill">Bar Chart</span>
-        </div>
-        <div id="barChart"></div>
+      <div class="kpi-card">
+        <div class="kpi-label">Average CO₂</div>
+        <div class="kpi-value" id="kpiAvg">–</div>
+        <div class="kpi-sub">Across all active stations</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-label">Worst Hotspot</div>
+        <div class="kpi-value" id="kpiMax">–</div>
+        <div class="kpi-sub" id="kpiMaxStation">–</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-label">CO₂ Reduction</div>
+        <div class="kpi-value" id="kpiReduction">0 ppm</div>
+        <div class="kpi-sub">Total drop vs. baseline today</div>
       </div>
     </div>
   </div>
+
+  <div id="charts">
+    <div class="card">
+      <div class="card-inner-header">
+        <div class="card-inner-title">Station Snapshot</div>
+        <span class="pill">Tabular View</span>
+      </div>
+      <div id="table"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-inner-header">
+        <div class="card-inner-title">CO₂ Levels</div>
+        <span class="pill">Bar Chart</span>
+      </div>
+      <div id="barChart"></div>
+    </div>
+  </div>
+</div>
+
 </div>
 
 <script>
@@ -176,7 +210,13 @@ function updateEfficiencySuggestion() {
 
 async function fetchStations(){
     const res = await fetch(`${BASE_URL}/get_stations`);
-    stations = await res.json();
+    const rawStations = await res.json();
+
+    // Add baseline_co2 once (for decision-support reduction metric)
+    stations = rawStations.map(s => ({
+      ...s,
+      baseline_co2: s.co2
+    }));
 
     if(citySelect.options.length === 0){
         const cities = [...new Set(stations.map(s=>s.city))];
@@ -197,6 +237,55 @@ async function fetchStations(){
     updateStations();
     drawEntities();
 }
+
+function updateSummary(data) {
+  const city = citySelect.value || "No city selected";
+  const kpiCityEl = document.getElementById("kpiCity");
+  const kpiStationsEl = document.getElementById("kpiStations");
+  const kpiAvgEl = document.getElementById("kpiAvg");
+  const kpiMaxEl = document.getElementById("kpiMax");
+  const kpiMaxStationEl = document.getElementById("kpiMaxStation");
+  const kpiReductionEl = document.getElementById("kpiReduction");
+
+  if (!kpiCityEl) return; // safety if card missing
+
+  const valid = data.filter(s => s.co2 !== undefined && !isNaN(s.co2));
+  const count = valid.length;
+
+  kpiCityEl.textContent = city === "" ? "All / None" : city;
+  kpiStationsEl.textContent = `${count} monitoring station${count === 1 ? "" : "s"}`;
+
+  if (count === 0) {
+    kpiAvgEl.textContent = "–";
+    kpiMaxEl.textContent = "–";
+    kpiMaxStationEl.textContent = "No data";
+    kpiReductionEl.textContent = "0 ppm";
+    return;
+  }
+
+  // Average CO₂
+  const avg = valid.reduce((sum, s) => sum + s.co2, 0) / count;
+  kpiAvgEl.textContent = `${avg.toFixed(1)} ppm`;
+
+  // Worst hotspot
+  let worst = valid[0];
+  for (const s of valid) {
+    if (s.co2 > worst.co2) worst = s;
+  }
+  kpiMaxEl.textContent = `${worst.co2.toFixed(1)} ppm`;
+  kpiMaxStationEl.textContent = `${worst.name} · ${worst.city}`;
+
+  // Total CO₂ reduction vs baseline
+  let totalDrop = 0;
+  valid.forEach(s => {
+    if (typeof s.baseline_co2 === "number" && !isNaN(s.baseline_co2)) {
+      const diff = s.baseline_co2 - s.co2;
+      if (diff > 0) totalDrop += diff;
+    }
+  });
+  kpiReductionEl.textContent = `${totalDrop.toFixed(1)} ppm`;
+}
+
 
 function updateStations(){
     const city = citySelect.value;
@@ -279,6 +368,7 @@ function drawEntities(){
     if(filtered.length > 0) viewer.zoomTo(viewer.entities);
     drawTable(filtered);
     drawChart(filtered);
+    updateSummary(filtered);
 }
 
 function drawTable(data){

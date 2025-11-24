@@ -25,7 +25,7 @@
     color: var(--text-main);
     overflow: hidden;
   }
-
+  
   body {
     display: flex;
     flex-direction: column;
@@ -378,22 +378,73 @@
   }
 
   @media (max-width: 900px) {
-    #main {
-      flex-direction: column;
-      height: auto;
-      overflow: auto;
-    }
-    #controls {
-      width: 100%;
-      flex-direction: row;
-      flex-wrap: wrap;
-      gap: 10px;
-    }
-    #dashboard {
-      height: auto;
-      max-height: none;
-    }
-    #charts {
-      flex-direction: column;
-    }
+  html, body {
+    height: auto;
+    overflow: auto;     /* allow page to scroll on phone */
   }
+
+  #main {
+    flex-direction: column;
+    height: auto;
+    overflow: visible;  /* main just grows with content */
+  }
+
+  #controls {
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  #dashboard {
+    height: auto;
+    max-height: none;
+    overflow: visible;  /* no inner scroll needed; page scrolls */
+  }
+
+  #charts {
+    flex-direction: column;
+  }
+}
+ /* DECISION-SUPPORT KPI GRID */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.kpi-card {
+  padding: 10px 10px 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(148,163,184,0.25);
+  background: radial-gradient(circle at top, rgba(15,23,42,0.95), rgba(15,23,42,0.85));
+  box-shadow: 0 10px 24px rgba(15,23,42,0.7);
+}
+
+.kpi-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.kpi-value {
+  font-size: 20px;
+  font-weight: 600;
+  color: #e5e7eb;
+  margin-bottom: 2px;
+}
+
+.kpi-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* Stack KPIs on small screens */
+@media (max-width: 900px) {
+  .kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
