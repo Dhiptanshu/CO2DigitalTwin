@@ -448,3 +448,29 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* segmented control */
+.segmented {
+  display:flex;
+  gap:6px;
+  align-items:center;
+  margin-top:6px;
+}
+.segmented label {
+  font-size:13px;
+  padding:6px 8px;
+  border-radius:10px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.02);
+  cursor: pointer;
+  color: var(--text-main);
+}
+.segmented input[type="radio"] { display:none; }
+.segmented input[type="radio"]:checked + span { /* not used because label wraps input */ }
+
+/* highlight selected via a small script style toggle instead */
+.segmented label.selected {
+  background: linear-gradient(circle at top, var(--accent-strong), var(--accent));
+  color: #071025;
+  border-color: rgba(56,189,248,0.5);
+}
