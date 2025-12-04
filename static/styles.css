@@ -95,16 +95,21 @@
 
   /* SIDEBAR */
   #controls {
-    width: 290px;
-    background: radial-gradient(circle at top, #020617 0, #020617 35%, #020617 100%);
-    border-radius: var(--radius-xl);
-    padding: 18px 16px;
-    border: 1px solid var(--border-subtle);
-    box-shadow: var(--shadow-soft);
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
+  width: 290px;
+  background: radial-gradient(circle at top, #020617 0, #020617 35%, #020617 100%);
+  border-radius: var(--radius-xl);
+  padding: 18px 16px;
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  /* NEW: allow scrolling if content is taller than the screen */
+  max-height: calc(100vh - 80px);  /* header (~60px) + padding */
+  overflow-y: auto;
+}
+
 
   #controls h3 {
     margin: 0 0 6px 0;
@@ -268,6 +273,54 @@
   #applyBtn:active {
     transform: translateY(0);
     box-shadow: 0 8px 18px rgba(56,189,248,0.4);
+  }
+
+  #startReportBtn,
+  #downloadReportBtn {
+    margin-top: 8px;
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: 999px;
+    border: none;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: transform 0.12s ease,
+                box-shadow 0.12s ease,
+                filter 0.12s ease,
+                opacity 0.12s ease;
+  }
+
+  #startReportBtn {
+    background: radial-gradient(circle at top, #3b82f6, #1d4ed8);
+    color: #e5e7eb;
+    box-shadow: 0 10px 25px rgba(59,130,246,0.45);
+  }
+
+  #downloadReportBtn {
+    background: radial-gradient(circle at top, #22c55e, #15803d);
+    color: #020617;
+    box-shadow: 0 10px 25px rgba(34,197,94,0.45);
+  }
+
+  #startReportBtn:hover,
+  #downloadReportBtn:hover:enabled {
+    transform: translateY(-1px);
+    filter: brightness(1.05);
+  }
+
+  #startReportBtn:active,
+  #downloadReportBtn:active:enabled {
+    transform: translateY(0);
+    box-shadow: 0 8px 18px rgba(15,23,42,0.5);
+  }
+
+  #downloadReportBtn:disabled {
+    opacity: 0.4;
+    cursor: default;
+    box-shadow: none;
   }
 
   /* DASHBOARD AREA */
@@ -542,4 +595,18 @@
   background: linear-gradient(circle at top, var(--accent-strong), var(--accent));
   color: #071025;
   border-color: rgba(56,189,248,0.5);
+}
+
+#startReportBtn {
+  background: #3b82f6;
+  color: white;
+  border-radius: 999px;
+  margin-top: -2px;
+}
+
+#downloadReportBtn {
+  background: #22c55e;
+  color: #020617;
+  border-radius: 999px;
+  margin-top: 4px;
 }

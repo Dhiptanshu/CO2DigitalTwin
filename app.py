@@ -1,5 +1,5 @@
 # app.py
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory, send_file
 from flask_cors import CORS
 import pandas as pd
 import json
@@ -9,6 +9,9 @@ import math
 import threading
 import time
 import random
+import io
+import base64
+
 
 app = Flask(__name__)
 CORS(app)
@@ -602,6 +605,171 @@ def apply_intervention():
         "albedo": albedo,
         "lulc": lulc_factor
     })
+
+from reportlab.platypus import (
+    SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle
+)
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+import base64, os, time
+from datetime import datetime
+
+@app.route("/generate_report", methods=["POST"])
+def generate_report():
+    payload = request.get_json(force=True) or {}
+
+    log   = payload.get("log", []) or []
+    charts = payload.get("charts", []) or []
+    kpis  = payload.get("kpis", {}) or {}
+    scope = (payload.get("scope") or "session").upper()
+    focus_city = payload.get("city") or "All cities"
+
+    ts_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    file_name = f"report_{int(time.time())}.pdf"
+    doc = SimpleDocTemplate(file_name, pagesize=A4)
+    styles = getSampleStyleSheet()
+    normal = styles["Normal"]
+    story = []
+
+    # --- Title + header ---
+    story.append(Paragraph("Digital Twin CO2 Reduction Report", styles["Title"]))
+    story.append(Spacer(1, 6))
+    story.append(Paragraph(
+        f"Generated on {ts_str} · Scope: {scope} · Focus city: {focus_city}",
+        normal
+    ))
+    story.append(Spacer(1, 12))
+    story.append(Paragraph(
+        "Summary of urban CO2 simulation, interventions, and inferred sectoral drivers.",
+        normal
+    ))
+    story.append(Spacer(1, 12))
+
+    # --- KPIs ---
+    story.append(Paragraph("Key Simulation KPIs", styles["Heading2"]))
+    story.append(Spacer(1, 6))
+
+    total_int = kpis.get("totalInterventions", len(log))
+    total_drop = kpis.get("totalDrop", 0)
+    best_drop = kpis.get("bestDrop", 0)
+    best_loc  = kpis.get("bestLocation")
+
+    bullet_lines = [
+        f"Total interventions: {total_int}",
+        f"Cumulative reduction vs baseline: {total_drop} ppm",
+    ]
+    if best_loc:
+        bullet_lines.append(
+            f"Best single intervention: {best_drop} ppm at {best_loc}"
+        )
+
+    for line in bullet_lines:
+        story.append(Paragraph("• " + line, normal))
+
+    story.append(Spacer(1, 12))
+
+    # --- Narrative (simple, but reads professionally) ---
+    story.append(Paragraph("Narrative Summary", styles["Heading2"]))
+    story.append(Spacer(1, 6))
+    story.append(Paragraph(
+        "This session explored carbon capture strategies across selected Indian "
+        "cities, using the digital twin to test roadside capture units, vertical "
+        "gardens, and biofilters. Each intervention adjusts the underlying CO2 "
+        "signal for the affected monitoring station, allowing planners to compare "
+        "before/after concentrations and identify high-impact locations.",
+        normal
+    ))
+    story.append(Spacer(1, 12))
+
+    # --- Interventions table ---
+    story.append(Paragraph("Interventions Run", styles["Heading2"]))
+    story.append(Spacer(1, 6))
+
+    table_data = [[
+        "City", "Station", "Method",
+        "Before (ppm)", "After (ppm)", "Drop (ppm)", "Eff. (%)"
+    ]]
+
+    for e in log:
+        before = e.get("base_co2")
+        after  = e.get("co2_after")
+        drop   = e.get("reduction")
+        eff    = e.get("efficiency")
+
+        def fmt(x):
+            return "–" if x is None else f"{x:.1f}" if isinstance(x, (int, float)) else str(x)
+
+        table_data.append([
+            e.get("city", "–"),
+            e.get("station", "–"),
+            e.get("method", "–"),
+            fmt(before),
+            fmt(after),
+            fmt(drop),
+            fmt(eff),
+        ])
+
+    tbl = Table(table_data, repeatRows=1)
+    tbl.setStyle(TableStyle([
+        # header row
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#111827")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 0), 9),
+        ("ALIGN", (0, 0), (-1, 0), "CENTER"),
+        ("BOTTOMPADDING", (0, 0), (-1, 0), 6),
+
+        # body
+        ("BACKGROUND", (0, 1), (-1, -1), colors.white),
+        ("TEXTCOLOR", (0, 1), (-1, -1), colors.black),
+        ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+        ("FONTSIZE", (0, 1), (-1, -1), 8),
+        ("ALIGN", (0, 1), (-1, -1), "CENTER"),
+
+        # grid
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+    ]))
+
+    story.append(tbl)
+    story.append(Spacer(1, 16))
+
+    # --- Charts from base64 sent by frontend ---
+    story.append(Paragraph("Key Visuals", styles["Heading2"]))
+    story.append(Spacer(1, 8))
+
+    img_paths = []
+    for idx, chart in enumerate(charts):
+        b64 = chart.get("image")
+        if not b64:
+            continue
+
+        img_bytes = base64.b64decode(b64)
+        img_path = f"report_chart_{int(time.time())}_{idx}.png"
+        with open(img_path, "wb") as f:
+            f.write(img_bytes)
+        img_paths.append(img_path)
+
+        title = chart.get("title") or ""
+        if title:
+            story.append(Paragraph(title, styles["Heading3"]))
+            story.append(Spacer(1, 4))
+
+        story.append(Image(img_path, width=480, height=260))
+        story.append(Spacer(1, 16))
+
+    # build PDF
+    doc.build(story)
+
+    # clean up chart images
+    for p in img_paths:
+        try:
+            os.remove(p)
+        except OSError:
+            pass
+
+    return send_from_directory(".", file_name, as_attachment=True)
 
 # ----------- Run Flask -----------
 if __name__ == "__main__":

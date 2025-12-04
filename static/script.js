@@ -6,7 +6,7 @@ let viewer;
 // Base URL for API calls
 const BASE_URL = window.location.origin;
 
-// Dropdowns
+// Dropdowns / controls
 const citySelect = document.getElementById('citySelect');
 const citySearchInput = document.getElementById('citySearch');
 const cityRecommendationsEl = document.getElementById('cityRecommendations');
@@ -14,7 +14,19 @@ const citySuggestionsEl = document.getElementById('citySearchSuggestions');
 const stationSelect = document.getElementById('stationSelect');
 const methodSelect = document.getElementById('methodSelect');
 const reductionInput = document.getElementById('reductionInput');
+const startReportBtn = document.getElementById('startReportBtn');
+const downloadReportBtn = document.getElementById('downloadReportBtn');
+const reportScopeSelect = document.getElementById('reportScope'); // may be null if you didn't add it
 
+// ---------- Reporting state ----------
+let displayMode = 'baseline'; // 'baseline' | 'live' | 'both'
+let colorMode = 'co2';        // 'co2' | 'sector'
+let recommendedCities = [];
+let availableCities = [];
+let suggestionActiveIndex = -1;
+
+let reportingActive = false;
+let reportLog = []; // array of interventions to send to backend
 
 // Frontend LULC mapping (for suggestions)
 const LULC_FACTORS = {
@@ -91,13 +103,6 @@ function getColor(co2){
 }
 
 // ---------- Display mode handling ----------
-let displayMode = 'baseline'; // 'baseline' | 'live' | 'both'
-let colorMode = 'co2';        // 'co2' | 'sector'
-let recommendedCities = [];
-let availableCities = [];
-let suggestionActiveIndex = -1;
-
-
 function stationHasForMode(s, mode) {
   if (!s) return false;
   const hasBase = (s.co2 !== undefined && !isNaN(s.co2));
@@ -141,8 +146,6 @@ function rebuildCityDropdown() {
     updateCitySuggestions();
   }
 }
-
-
 
 function filterCitiesBySearch() {
   if (!citySearchInput || !citySelect) return;
@@ -220,7 +223,6 @@ function updateCitySuggestions() {
   refreshSuggestionHighlight();
 }
 
-
 function refreshSuggestionHighlight() {
   if (!citySuggestionsEl) return;
   const items = citySuggestionsEl.querySelectorAll('.city-suggestion-item');
@@ -228,7 +230,6 @@ function refreshSuggestionHighlight() {
     el.classList.toggle('active', idx === suggestionActiveIndex);
   });
 }
-
 
 // Update stations list for selected city + mode
 function updateStations(){
@@ -298,7 +299,6 @@ function renderCityRecommendations() {
   });
 }
 
-
 // Fetch stations
 async function fetchStations(){
   const res = await fetch(`${BASE_URL}/get_stations`);
@@ -312,7 +312,6 @@ async function fetchStations(){
   updateStations();
   drawEntities();
 }
-
 
 // ------------- KPIs + helpers -------------
 function getDisplayValue(s) {
@@ -374,6 +373,41 @@ function updateSummary(data) {
     }
   });
   kpiReductionEl.textContent = `${totalDrop.toFixed(1)} ppm`;
+}
+
+// ---------- Reporting helpers ----------
+function logIntervention(entry) {
+  if (!reportingActive) return;
+  reportLog.push({
+    ...entry,
+    timestamp: new Date().toISOString()
+  });
+}
+
+function computeReportKpis(logEntries) {
+  if (!logEntries.length) return null;
+
+  let totalDrop = 0;
+  let maxDrop = -Infinity;
+  let maxDropEntry = null;
+
+  logEntries.forEach(e => {
+    const drop = e.reduction ?? 0;
+    totalDrop += drop;
+    if (drop > maxDrop) {
+      maxDrop = drop;
+      maxDropEntry = e;
+    }
+  });
+
+  return {
+    totalInterventions: logEntries.length,
+    totalDrop: +totalDrop.toFixed(1),
+    bestDrop: maxDropEntry ? +maxDropEntry.reduction.toFixed(1) : 0,
+    bestLocation: maxDropEntry
+      ? `${maxDropEntry.station} · ${maxDropEntry.city || ""}`.trim()
+      : null
+  };
 }
 
 // ------------- Sector helpers -------------
@@ -854,7 +888,6 @@ if (displaySeg) {
 
 if (citySearchInput) {
   citySearchInput.addEventListener('input', () => {
-    // filterCitiesBySearch();
     updateCitySuggestions();
   });
 
@@ -867,8 +900,6 @@ if (citySearchInput) {
       if (firstSuggestion) {
         firstSuggestion.click();  // pick top suggestion
         e.preventDefault();
-      } else {
-        // fallback...
       }
     } else if (e.key === 'Escape') {
       if (citySuggestionsEl) citySuggestionsEl.style.display = "none";
@@ -910,6 +941,105 @@ methodSelect.onchange = () => {
   updateEfficiencySuggestion();
 };
 
+// ---------- Reporting buttons ----------
+if (startReportBtn) {
+  startReportBtn.onclick = () => {
+    reportingActive = true;
+    reportLog = [];
+    alert("Reporting started. All subsequent interventions will be included in the report.");
+    if (downloadReportBtn) downloadReportBtn.disabled = false;
+  };
+}
+
+if (downloadReportBtn) {
+  downloadReportBtn.onclick = async () => {
+    if (!reportLog.length) {
+      alert("No interventions logged yet. Click 'Start Reporting' and apply at least one intervention.");
+      return;
+    }
+
+    const scope = reportScopeSelect ? reportScopeSelect.value : 'session';
+    const currentCity = citySelect.value || null;
+
+    let scopedLog = reportLog;
+    if (scope === 'city' && currentCity) {
+      scopedLog = reportLog.filter(e => e.city === currentCity);
+      if (!scopedLog.length) {
+        alert("No interventions have been logged for the currently selected city.");
+        return;
+      }
+    }
+
+    const kpis = computeReportKpis(scopedLog) || {};
+
+    // Capture charts as base64 PNGs
+    const charts = [];
+
+    if (document.getElementById('barChart')) {
+      try {
+        const url = await Plotly.toImage('barChart', { format: 'png', width: 900, height: 450 });
+        charts.push({
+          id: 'barChart',
+          title: 'CO₂ Levels — Baseline vs Live',
+          image: url.split(',')[1]
+        });
+      } catch (e) {
+        console.log("Could not capture bar chart:", e);
+      }
+    }
+
+    if (document.getElementById('sectorChart')) {
+      try {
+        const url = await Plotly.toImage('sectorChart', { format: 'png', width: 700, height: 400 });
+        charts.push({
+          id: 'sectorChart',
+          title: 'Sectoral Emission Mix',
+          image: url.split(',')[1]
+        });
+      } catch (e) {
+        console.log("Could not capture sector chart:", e);
+      }
+    }
+
+    try {
+      const res = await fetch(`${BASE_URL}/generate_report`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scope,
+          city: currentCity,
+          display_mode: displayMode,
+          log: scopedLog,
+          kpis,
+          charts
+        })
+      });
+
+      if (!res.ok) {
+        const txt = await res.text();
+        console.error("Report generation failed:", txt);
+        alert("Failed to generate report.");
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = "CO2_Digital_Twin_Report.pdf";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+
+    } catch (err) {
+      console.error(err);
+      alert("Error while generating report.");
+    }
+  };
+}
+
+// ---------- Apply intervention ----------
 document.getElementById('applyBtn').onclick = async () => {
   const stationName = stationSelect.value;
   const efficiency = parseFloat(reductionInput.value);
@@ -946,6 +1076,24 @@ document.getElementById('applyBtn').onclick = async () => {
       }
     });
 
+    // --- log this intervention for reporting ---
+    const stationMeta = stations.find(s => s.name === stationName);
+    logIntervention({
+      station: stationName,
+      city: stationMeta ? stationMeta.city : null,
+      state: stationMeta ? stationMeta.state : null,
+      method: methodSelect.value,
+      efficiency: efficiency,
+      applied_to: appliedTo,
+      base_co2: result.base_co2,
+      co2_after: result.co2_after,
+      reduction: result.base_co2 - result.co2_after,
+      ndvi: result.ndvi,
+      albedo: result.albedo,
+      lulc_factor: result.lulc
+    });
+    // -----------------------------------------
+
     drawEntities();
     drawSectorChartForSelection();
   } else {
@@ -954,7 +1102,6 @@ document.getElementById('applyBtn').onclick = async () => {
 };
 
 // ----------- Load -----------
-
 window.onload = async () => {
   await initCesium();
   await fetchStations();
