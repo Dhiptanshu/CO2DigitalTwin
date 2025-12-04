@@ -8,9 +8,13 @@ const BASE_URL = window.location.origin;
 
 // Dropdowns
 const citySelect = document.getElementById('citySelect');
+const citySearchInput = document.getElementById('citySearch');
+const cityRecommendationsEl = document.getElementById('cityRecommendations');
+const citySuggestionsEl = document.getElementById('citySearchSuggestions');
 const stationSelect = document.getElementById('stationSelect');
 const methodSelect = document.getElementById('methodSelect');
 const reductionInput = document.getElementById('reductionInput');
+
 
 // Frontend LULC mapping (for suggestions)
 const LULC_FACTORS = {
@@ -89,6 +93,10 @@ function getColor(co2){
 // ---------- Display mode handling ----------
 let displayMode = 'baseline'; // 'baseline' | 'live' | 'both'
 let colorMode = 'co2';        // 'co2' | 'sector'
+let recommendedCities = [];
+let availableCities = [];
+let suggestionActiveIndex = -1;
+
 
 function stationHasForMode(s, mode) {
   if (!s) return false;
@@ -107,7 +115,10 @@ function rebuildCityDropdown() {
   });
 
   const cities = Array.from(citySet).sort((a,b)=> a.localeCompare(b));
+  availableCities = cities;   // <-- store for suggestions
+
   const prev = citySelect.value;
+  const searchQuery = citySearchInput ? citySearchInput.value.trim() : "";
 
   citySelect.innerHTML = "";
   citySelect.add(new Option("City", "", true, true));
@@ -122,7 +133,102 @@ function rebuildCityDropdown() {
     stationSelect.add(new Option("Station", "", true, true));
     stationSelect.options[0].disabled = true;
   }
+
+  // If user was already typing, preserve the text and re-filter
+  if (searchQuery && citySearchInput) {
+    citySearchInput.value = searchQuery;
+    filterCitiesBySearch();
+    updateCitySuggestions();
+  }
 }
+
+
+
+function filterCitiesBySearch() {
+  if (!citySearchInput || !citySelect) return;
+  const query = citySearchInput.value.trim().toLowerCase();
+
+  // Show/hide options based on search text
+  Array.from(citySelect.options).forEach((opt, idx) => {
+    // Always keep placeholder visible
+    if (idx === 0) {
+      opt.hidden = false;
+      return;
+    }
+    const match = opt.value.toLowerCase().includes(query);
+    opt.hidden = !match;
+  });
+}
+
+function updateCitySuggestions() {
+  if (!citySuggestionsEl || !citySearchInput) return;
+  const query = citySearchInput.value.trim().toLowerCase();
+
+  citySuggestionsEl.innerHTML = "";
+
+  if (!query) {
+    citySuggestionsEl.style.display = "none";
+    suggestionActiveIndex = -1;
+    return;
+  }
+
+  const matches = availableCities
+    .filter(c => c.toLowerCase().includes(query))
+    .slice(0, 7);  // limit to top 7 suggestions
+
+  if (!matches.length) {
+    citySuggestionsEl.style.display = "none";
+    suggestionActiveIndex = -1;
+    return;
+  }
+
+  suggestionActiveIndex = -1; // nothing selected initially
+
+  matches.forEach(city => {
+    const item = document.createElement('div');
+    item.className = 'city-suggestion-item';
+
+    const lower = city.toLowerCase();
+    const idx = lower.indexOf(query);
+
+    if (idx === -1) {
+      // fallback – shouldn’t really happen due to filter
+      item.textContent = city;
+    } else {
+      const before = city.slice(0, idx);
+      const match = city.slice(idx, idx + query.length);
+      const after = city.slice(idx + query.length);
+
+      item.innerHTML =
+        `<span class="city-suggestion-rest">${before}</span>` +
+        `<span class="city-suggestion-match">${match}</span>` +
+        `<span class="city-suggestion-rest">${after}</span>`;
+    }
+
+    item.onclick = () => {
+      citySelect.value = city;
+      citySearchInput.value = city;
+      citySuggestionsEl.style.display = "none";
+      suggestionActiveIndex = -1;
+      citySelect.dispatchEvent(new Event('change'));
+    };
+
+    citySuggestionsEl.appendChild(item);
+  });
+
+  citySuggestionsEl.style.display = "block";
+  refreshSuggestionHighlight();
+}
+
+
+function refreshSuggestionHighlight() {
+  if (!citySuggestionsEl) return;
+  const items = citySuggestionsEl.querySelectorAll('.city-suggestion-item');
+  items.forEach((el, idx) => {
+    el.classList.toggle('active', idx === suggestionActiveIndex);
+  });
+}
+
 
 // Update stations list for selected city + mode
 function updateStations(){
@@ -144,6 +250,55 @@ function updateStations(){
   });
 }
 
+function computeCityRecommendations() {
+  const cityMax = {};
+
+  stations.forEach(s => {
+    if (!s.city) return;
+    // Use display value (respects displayMode) or fallback to baseline/live
+    const v = getDisplayValue(s) ??
+              (typeof s.co2 === 'number' ? s.co2 : null) ??
+              (typeof s.co2_estimated === 'number' ? s.co2_estimated : null);
+
+    if (v == null || isNaN(v)) return;
+    if (!cityMax[s.city] || v > cityMax[s.city]) {
+      cityMax[s.city] = v; // track worst hotspot per city
+    }
+  });
+
+  recommendedCities = Object.entries(cityMax)
+    .sort((a, b) => b[1] - a[1]) // highest CO₂ first
+    .slice(0, 5)
+    .map(([city]) => city);
+}
+
+function renderCityRecommendations() {
+  if (!cityRecommendationsEl) return;
+  cityRecommendationsEl.innerHTML = "";
+
+  if (!recommendedCities.length) {
+    cityRecommendationsEl.style.display = "none";
+    return;
+  }
+
+  cityRecommendationsEl.style.display = "flex";
+
+  recommendedCities.forEach(city => {
+    const chip = document.createElement('span');
+    chip.className = 'chip chip-recommendation';
+    chip.textContent = city;
+    chip.onclick = () => {
+      citySelect.value = city;
+      if (citySearchInput) citySearchInput.value = city;
+      updateStations();
+      drawEntities();
+      drawSectorChartForSelection();
+    };
+    cityRecommendationsEl.appendChild(chip);
+  });
+}
+
+
 // Fetch stations
 async function fetchStations(){
   const res = await fetch(`${BASE_URL}/get_stations`);
@@ -152,9 +307,12 @@ async function fetchStations(){
   stations = rawStations.map(s => ({...s, baseline_co2: s.co2}));
 
   rebuildCityDropdown();
+  computeCityRecommendations();
+  renderCityRecommendations();
   updateStations();
   drawEntities();
 }
+
 
 // ------------- KPIs + helpers -------------
 function getDisplayValue(s) {
@@ -685,10 +843,36 @@ if (displaySeg) {
       labels.forEach(l => l.classList.remove('selected'));
       lbl.classList.add('selected');
       rebuildCityDropdown();
+      computeCityRecommendations();
+      renderCityRecommendations();
       updateStations();
       drawEntities();
       drawSectorChartForSelection();
     });
+  });
+}
+
+if (citySearchInput) {
+  citySearchInput.addEventListener('input', () => {
+    // filterCitiesBySearch();
+    updateCitySuggestions();
+  });
+
+  citySearchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const firstSuggestion = citySuggestionsEl
+        ? citySuggestionsEl.querySelector('.city-suggestion-item')
+        : null;
+
+      if (firstSuggestion) {
+        firstSuggestion.click();  // pick top suggestion
+        e.preventDefault();
+      } else {
+        // fallback...
+      }
+    } else if (e.key === 'Escape') {
+      if (citySuggestionsEl) citySuggestionsEl.style.display = "none";
+    }
   });
 }
 
@@ -701,6 +885,16 @@ if (colorModeSelect) {
 }
 
 citySelect.onchange = () => {
+  if (citySearchInput) {
+    citySearchInput.value = citySelect.value || "";
+
+    // Hide suggestions when a city is chosen
+    if (citySuggestionsEl) {
+      citySuggestionsEl.style.display = "none";
+    }
+    suggestionActiveIndex = -1;
+  }
+
   updateStations();
   drawEntities();
   drawSectorChartForSelection();

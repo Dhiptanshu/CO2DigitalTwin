@@ -135,6 +135,73 @@
     color: var(--text-muted);
   }
 
+  .city-search-wrapper {
+  position: relative;
+}
+
+.city-search-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: rgba(15, 23, 42, 0.98);
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.9);
+  max-height: 210px;
+  overflow-y: auto;
+  z-index: 20;
+  display: none; /* hidden by default */
+}
+
+.city-suggestion-item {
+  padding: 6px 10px;
+  font-size: 13px;
+  color: var(--text-muted);        /* base = lighter */
+  cursor: pointer;
+}
+
+.city-suggestion-match {
+  color: var(--text-main);         /* typed part = normal/strong */
+  font-weight: 500;
+}
+
+.city-suggestion-rest {
+  color: var(--text-muted);        /* other letters = lighter */
+}
+
+.city-suggestion-item.active {
+  background: rgba(30, 64, 175, 0.7);
+  color: var(--text-main);
+}
+
+
+.city-suggestion-item:hover {
+  background: rgba(30, 64, 175, 0.5);
+}
+
+
+  /* Recommended city chips */
+  #cityRecommendations {
+    flex-wrap: wrap;
+  }
+
+  .chip-recommendation {
+    border-color: rgba(56,189,248,0.5);
+    color: #e0f2fe;
+    cursor: pointer;
+    background: rgba(8,47,73,0.7);
+    transition: background 0.12s ease, transform 0.12s ease, box-shadow 0.12s ease;
+  }
+
+  .chip-recommendation:hover {
+    background: rgba(8,47,73,0.95);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 14px rgba(15,23,42,0.7);
+  }
+
+
   #controls label {
     display: block;
     margin-top: 9px;
@@ -145,7 +212,8 @@
   }
 
   #controls select,
-  #controls input[type=number] {
+  #controls input[type=number],
+  #controls input[type=text] {
     width: 100%;
     padding: 7px 9px;
     border-radius: 10px;
@@ -157,6 +225,7 @@
     outline: none;
     transition: border 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
   }
+
 
   #controls select:focus,
   #controls input[type=number]:focus {

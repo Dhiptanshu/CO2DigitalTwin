@@ -37,7 +37,20 @@
       <span class="chip">Urban Planning</span>
     </div>
 
-    <label for="citySelect">Select City</label>
+    <label for="citySearch">Select City</label>
+    <div class="city-search-wrapper">
+      <input
+        type="text"
+        id="citySearch"
+        placeholder="Type to search city..."
+        autocomplete="off"
+      />
+      <!-- LIVE SUGGESTIONS DROPDOWN -->
+      <div id="citySearchSuggestions" class="city-search-suggestions"></div>
+    </div>
+    <div class="chip-row" id="cityRecommendations" style="display:none; margin-top:4px;">
+      <!-- Chips will be injected by JS -->
+    </div>
     <select id="citySelect"></select>
 
     <label for="stationSelect">Choose Station</label>
