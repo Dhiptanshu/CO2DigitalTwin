@@ -17,6 +17,10 @@ const reductionInput = document.getElementById('reductionInput');
 const startReportBtn = document.getElementById('startReportBtn');
 const downloadReportBtn = document.getElementById('downloadReportBtn');
 const reportScopeSelect = document.getElementById('reportScope'); // may be null if you didn't add it
+// ---- Weather state ----
+let currentWeatherRaw = null;     // latest backend weather for selected city
+let currentWeatherCity = null;
+
 
 // ---------- Reporting state ----------
 let displayMode = 'baseline'; // 'baseline' | 'live' | 'both'
@@ -223,6 +227,30 @@ function updateCitySuggestions() {
   refreshSuggestionHighlight();
 }
 
+async function updateCityWeather() {
+  const city = citySelect.value;
+  if (!city) return;
+
+  try {
+    const res = await fetch(`${BASE_URL}/get_weather?city=` + encodeURIComponent(city));
+    const data = await res.json();
+    if (!data.success) return;
+
+    // Example DOM updates (IDs depend on how we named them in the HTML)
+    document.getElementById("weatherTemp").textContent =
+      (data.temperature != null ? `${data.temperature.toFixed(1)} °C` : "–");
+    document.getElementById("weatherWind").textContent =
+      (data.windspeed != null ? `${data.windspeed.toFixed(1)} km/h` : "–");
+    document.getElementById("weatherDispersion").textContent =
+      data.dispersion_label || "–";
+    document.getElementById("weatherSeason").textContent =
+      `${data.season} · factor ×${data.month_factor.toFixed(2)}`;
+  } catch (e) {
+    console.error("Weather update failed", e);
+  }
+}
+
+
 function refreshSuggestionHighlight() {
   if (!citySuggestionsEl) return;
   const items = citySuggestionsEl.querySelectorAll('.city-suggestion-item');
@@ -312,6 +340,52 @@ async function fetchStations(){
   updateStations();
   drawEntities();
 }
+
+async function updateCityWeather() {
+  const city = citySelect.value;
+  const summaryEl = document.getElementById('weatherSummary');
+  const metaEl = document.getElementById('weatherMeta');
+
+  if (!city) {
+    currentWeatherRaw = null;
+    if (summaryEl) summaryEl.textContent = 'Select a city';
+    if (metaEl) metaEl.textContent =
+      'Winters in north India often show higher CO₂ / pollution due to low wind & mixing height.';
+    Plotly.purge('monthlyChart');
+    return;
+  }
+
+  try {
+    const res = await fetch(`${BASE_URL}/get_weather?city=` + encodeURIComponent(city));
+    const data = await res.json();
+
+    if (!data.success) {
+      console.warn('Weather backend returned error', data);
+      currentWeatherRaw = null;
+      if (summaryEl) summaryEl.textContent = `Weather for ${city} not available`;
+      return;
+    }
+
+    // Raw values from backend
+    currentWeatherRaw = {
+      city: data.city,
+      temperature: data.temperature,   // °C
+      windspeed: data.windspeed,      // km/h from backend
+      winddirection: data.winddirection,
+      season: data.season,
+      month_factor: data.month_factor
+    };
+
+    // Apply current selected month scenario
+    const monthSelect = document.getElementById('weatherMonth');
+    const selectedVal = monthSelect ? monthSelect.value : 'auto';
+    applyWeatherScenario(selectedVal);
+  } catch (err) {
+    console.error('Weather fetch failed', err);
+    if (summaryEl) summaryEl.textContent = `Weather for ${city} not available`;
+  }
+}
+
 
 // ------------- KPIs + helpers -------------
 function getDisplayValue(s) {
@@ -456,6 +530,185 @@ function aggregateCitySectorWeights(city) {
   if (!any) return null;
   return totals;
 }
+
+// --------- Weather helpers (frontend seasonal logic) ----------
+function getSeasonalProfileForMonth(monthIndex) {
+  // monthIndex: 1–12
+  const m = monthIndex;
+  // Simple approximate seasonal profile for Indian cities
+  // co2Factor roughly matches backend's month_factor logic.
+  let co2Factor = 1.0;
+  if (m === 11 || m === 12 || m === 1) co2Factor = 1.25;       // winter build-up
+  else if (m === 10 || m === 2)        co2Factor = 1.15;       // shoulder
+  else if (m === 4 || m === 5 || m === 6) co2Factor = 0.90;    // pre-monsoon
+  else if (m === 7 || m === 8 || m === 9) co2Factor = 0.95;    // monsoon
+  else co2Factor = 1.0;
+
+  // crude synthetic temperature offset (°C) relative to a neutral month
+  let tempDelta = 0;
+  if (m === 12 || m === 1) tempDelta = -4;
+  else if (m === 11 || m === 2) tempDelta = -2;
+  else if (m === 3) tempDelta = 1;
+  else if (m === 4 || m === 10) tempDelta = 2;
+  else if (m === 5 || m === 6) tempDelta = 4;
+  else if (m === 7 || m === 8 || m === 9) tempDelta = 1;
+
+  // base mixing height in meters (lower in winter, higher in summer)
+  let mixingBase = 600;
+  if (m === 11 || m === 12 || m === 1) mixingBase = 350;
+  else if (m === 10 || m === 2) mixingBase = 450;
+  else if (m === 3) mixingBase = 550;
+  else if (m === 4 || m === 5 || m === 6) mixingBase = 900;
+  else if (m === 7 || m === 8 || m === 9) mixingBase = 750;
+
+  return { co2Factor, tempDelta, mixingBase };
+}
+
+function drawMonthlyChart(cityName) {
+  const container = document.getElementById('monthlyChart');
+  if (!container) return;
+
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const factors = [];
+  for (let m = 1; m <= 12; m++) {
+    const profile = getSeasonalProfileForMonth(m);
+    factors.push(profile.co2Factor);
+  }
+
+  const selectedEl = document.getElementById('weatherMonth');
+  const selectedVal = selectedEl ? selectedEl.value : 'auto';
+  const selIndex = selectedVal === 'auto'
+    ? (new Date().getMonth()) // 0–11
+    : (parseInt(selectedVal, 10) - 1);
+
+  const barColors = factors.map((f, idx) => {
+    const alpha = idx === selIndex ? 0.95 : 0.45;
+    const base = idx === selIndex ? [56,189,248] : [148,163,184];
+    return `rgba(${base[0]},${base[1]},${base[2]},${alpha})`;
+  });
+
+  const data = [{
+    type: 'bar',
+    x: months,
+    y: factors,
+    marker: {
+      color: barColors,
+      line: { width: 1, color: 'rgba(15,23,42,1)' }
+    },
+    hovertemplate: '<b>%{x}</b><br>Relative build-up ×%{y:.2f}<extra></extra>'
+  }];
+
+  const layout = {
+    title: {
+      text: cityName ? `${cityName} — monthly stagnation potential` : 'Monthly stagnation potential',
+      font: { size: 12, color: '#e5e7eb' }
+    },
+    margin: { t: 40, l: 40, r: 10, b: 40 },
+    paper_bgcolor: 'rgba(15,23,42,0)',
+    plot_bgcolor: 'rgba(15,23,42,0.9)',
+    xaxis: { tickfont: { size: 11, color: '#9ca3af' } },
+    yaxis: { tickfont: { size: 11, color: '#9ca3af' }, title: 'Relative build-up (×)' }
+  };
+
+  Plotly.react('monthlyChart', data, layout, {displaylogo:false, responsive:true});
+}
+
+function applyWeatherScenario(selectedMonthValue) {
+  const city = citySelect.value || '';
+  const summaryEl = document.getElementById('weatherSummary');
+  const metaEl = document.getElementById('weatherMeta');
+  const tempEl = document.getElementById('weatherTemp');
+  const windEl = document.getElementById('weatherWind');
+  const mixingEl = document.getElementById('weatherMixing');
+  const stagEl = document.getElementById('weatherStagnation');
+
+  if (!summaryEl || !currentWeatherRaw) {
+    if (summaryEl) summaryEl.textContent = city ? `Weather for ${city}` : 'Select a city';
+    return;
+  }
+
+  const raw = currentWeatherRaw;
+  const now = new Date();
+
+  // Determine scenario month index 1–12
+  let m;
+  if (!selectedMonthValue || selectedMonthValue === 'auto') {
+    m = now.getMonth() + 1;
+  } else {
+    m = parseInt(selectedMonthValue, 10);
+    if (isNaN(m) || m < 1 || m > 12) m = now.getMonth() + 1;
+  }
+
+  const profile = getSeasonalProfileForMonth(m);
+
+  // Wind in m/s from backend km/h
+  const windMs = (typeof raw.windspeed === 'number')
+    ? (raw.windspeed / 3.6)
+    : null;
+
+  // Scenario temperature: base temp + seasonal delta
+  let displayTemp = raw.temperature;
+  if (typeof displayTemp === 'number') {
+    displayTemp = displayTemp + profile.tempDelta;
+  }
+
+  // Mixing height: base + small bonus from wind
+  let mixingHeight = profile.mixingBase;
+  if (typeof windMs === 'number') {
+    mixingHeight += Math.max(0, windMs) * 20; // each m/s adds ~20 m
+  }
+
+  // Stagnation risk from combination of month co2Factor & wind
+  let risk = 'Moderate';
+  if (windMs != null) {
+    if (profile.co2Factor >= 1.2 && windMs < 1.5) risk = 'High';
+    else if (profile.co2Factor >= 1.1 && windMs < 3) risk = 'Elevated';
+    else if (windMs > 4 && profile.co2Factor <= 1.0) risk = 'Low';
+  }
+
+  // Update headline
+  const monthNamesFull = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const labelMonth = monthNamesFull[m-1];
+  summaryEl.textContent = city
+    ? `${city} — ${labelMonth} scenario`
+    : `${labelMonth} scenario`;
+
+  if (metaEl) {
+    metaEl.textContent =
+      `Relative build-up factor ×${profile.co2Factor.toFixed(2)} · ` +
+      (risk === 'High' ? 'High stagnation risk (low dispersion)' :
+       risk === 'Elevated' ? 'Elevated stagnation during calm days' :
+       risk === 'Low' ? 'Good dispersion, lower accumulation' :
+       'Moderate dispersion');
+  }
+
+  // Update metrics
+  if (tempEl) {
+    tempEl.textContent =
+      (typeof displayTemp === 'number') ? displayTemp.toFixed(1) : '–';
+  }
+  if (windEl) {
+    windEl.textContent =
+      (typeof windMs === 'number') ? windMs.toFixed(1) : '–';
+  }
+  if (mixingEl) {
+    mixingEl.textContent = mixingHeight ? Math.round(mixingHeight) : '–';
+  }
+  if (stagEl) {
+    stagEl.textContent = risk;
+    stagEl.className = 'weather-metric-badge'; // reset base class
+    stagEl.classList.add(
+      risk === 'High' ? 'badge-high' :
+      risk === 'Elevated' ? 'badge-elevated' :
+      risk === 'Low' ? 'badge-low' :
+      'badge-moderate'
+    );
+  }
+
+  // Redraw monthly chart with new highlight
+  drawMonthlyChart(city);
+}
+
 
 function getSectorCesiumColor(sector) {
   switch (sector) {
@@ -915,11 +1168,18 @@ if (colorModeSelect) {
   };
 }
 
+const weatherMonthSelect = document.getElementById('weatherMonth');
+if (weatherMonthSelect) {
+  weatherMonthSelect.onchange = () => {
+    const val = weatherMonthSelect.value;
+    applyWeatherScenario(val);
+  };
+}
+
+
 citySelect.onchange = () => {
   if (citySearchInput) {
     citySearchInput.value = citySelect.value || "";
-
-    // Hide suggestions when a city is chosen
     if (citySuggestionsEl) {
       citySuggestionsEl.style.display = "none";
     }
@@ -929,7 +1189,9 @@ citySelect.onchange = () => {
   updateStations();
   drawEntities();
   drawSectorChartForSelection();
+  updateCityWeather();   // 🔹 NEW: fetch + show weather for this city
 };
+
 
 stationSelect.onchange = () => {
   drawEntities();
@@ -1041,71 +1303,50 @@ if (downloadReportBtn) {
 
 // ---------- Apply intervention ----------
 document.getElementById('applyBtn').onclick = async () => {
-  const stationName = stationSelect.value;
-  const efficiency = parseFloat(reductionInput.value);
+    const stationName = stationSelect.value;
+    const cityName = citySelect.value;
+    const interventionName = methodSelect.value;
+    const efficiency = parseFloat(reductionInput.value);
 
-  if (!stationName || isNaN(efficiency)) {
-    return alert("Select a station and enter a valid reduction.");
-  }
+    if (!stationName || isNaN(efficiency)) {
+        return alert("Select a station and enter a valid efficiency.");
+    }
 
-  let target = displayMode;
-  if (displayMode === 'both') {
-    target = 'baseline'; // or 'live' if you prefer
-  }
+    let target = displayMode;
+    if (displayMode === 'both') target = 'baseline';
 
-  const res = await fetch(`${BASE_URL}/apply_intervention`, {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({
-      station: stationName,
-      efficiency: efficiency,
-      target: target
-    })
-  });
+    // FIXED — Now sending correct parameters
+    const res = await fetch(`${BASE_URL}/apply_intervention`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            station: stationName,
+            city: cityName,
+            intervention: interventionName,
+            efficiency: efficiency
+        })
+    });
 
-  const result = await res.json();
-  if (result.success) {
-    const appliedTo = result.applied_to; // "baseline" or "live"
+    const result = await res.json();
+    if (!result.success) return alert("Error: " + result.error);
 
+    // Update local station data
     stations = stations.map(s => {
-      if (s.name !== stationName) return s;
-      if (appliedTo === "baseline") {
-        return { ...s, co2: result.co2_after };
-      } else {
-        return { ...s, co2_estimated: result.co2_after };
-      }
+        if (s.name === stationName) {
+            return { ...s, co2: result.after };
+        }
+        return s;
     });
-
-    // --- log this intervention for reporting ---
-    const stationMeta = stations.find(s => s.name === stationName);
-    logIntervention({
-      station: stationName,
-      city: stationMeta ? stationMeta.city : null,
-      state: stationMeta ? stationMeta.state : null,
-      method: methodSelect.value,
-      efficiency: efficiency,
-      applied_to: appliedTo,
-      base_co2: result.base_co2,
-      co2_after: result.co2_after,
-      reduction: result.base_co2 - result.co2_after,
-      ndvi: result.ndvi,
-      albedo: result.albedo,
-      lulc_factor: result.lulc
-    });
-    // -----------------------------------------
 
     drawEntities();
     drawSectorChartForSelection();
-  } else {
-    alert("Error applying intervention: " + result.error);
-  }
 };
-
 // ----------- Load -----------
 window.onload = async () => {
   await initCesium();
   await fetchStations();
   drawSectorChartForSelection();
+  drawMonthlyChart(null);
 };
 
 if ("serviceWorker" in navigator) {

@@ -144,6 +144,66 @@
       </div>
     </div>
 
+    <!-- 🆕 WEATHER & SEASONAL IMPACT CARD -->
+    <div class="card" id="weatherCard">
+      <div class="card-inner-header">
+        <div class="card-inner-title">Weather &amp; Seasonal Impact</div>
+        <span class="pill">Monthly Pattern</span>
+      </div>
+
+      <div class="weather-header-row">
+        <div class="weather-select-group">
+          <label for="weatherMonth" class="weather-label">Month</label>
+          <select id="weatherMonth">
+            <option value="auto" selected>Auto (based on city)</option>
+            <option value="1">January (winter)</option>
+            <option value="2">February</option>
+            <option value="3">March</option>
+            <option value="4">April</option>
+            <option value="5">May (summer peak)</option>
+            <option value="6">June</option>
+            <option value="7">July</option>
+            <option value="8">August</option>
+            <option value="9">September</option>
+            <option value="10">October</option>
+            <option value="11">November (early winter)</option>
+            <option value="12">December (winter)</option>
+          </select>
+        </div>
+
+        <div class="weather-current">
+          <div class="weather-main" id="weatherSummary">Select a city</div>
+          <div class="weather-sub" id="weatherMeta">
+            Winters in north India often show higher CO₂ / pollution due to low wind &amp; mixing height.
+          </div>
+        </div>
+      </div>
+
+      <div class="weather-metrics-row">
+        <div class="weather-metric">
+          <div class="weather-metric-label">Avg Temperature</div>
+          <div class="weather-metric-value" id="weatherTemp">–</div>
+          <div class="weather-metric-sub">°C</div>
+        </div>
+        <div class="weather-metric">
+          <div class="weather-metric-label">Wind Speed</div>
+          <div class="weather-metric-value" id="weatherWind">–</div>
+          <div class="weather-metric-sub">m/s</div>
+        </div>
+        <div class="weather-metric">
+          <div class="weather-metric-label">Mixing Height</div>
+          <div class="weather-metric-value" id="weatherMixing">–</div>
+          <div class="weather-metric-sub">m</div>
+        </div>
+        <div class="weather-metric">
+          <div class="weather-metric-label">Stagnation Risk</div>
+          <div class="weather-metric-badge" id="weatherStagnation">–</div>
+        </div>
+      </div>
+
+      <div id="monthlyChart" class="weather-monthly-chart"></div>
+    </div>
+
     <!-- Table + CO2 chart + Sector pie chart -->
     <div id="charts" class="card-column">
       <div class="card">

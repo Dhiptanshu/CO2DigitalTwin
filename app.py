@@ -1,5 +1,5 @@
 # app.py
-from flask import Flask, jsonify, request, send_from_directory, send_file
+from flask import Flask, jsonify, request, send_from_directory, send_file, render_template, session, redirect, url_for
 from flask_cors import CORS
 import pandas as pd
 import json
@@ -11,10 +11,101 @@ import time
 import random
 import io
 import base64
+import sqlite3
 
 
 app = Flask(__name__)
+app.secret_key = "supersecretkey"
 CORS(app)
+
+# ----------------------- USER DATABASE -----------------------
+def init_db():
+    """Create user table if not exists"""
+    conn = sqlite3.connect("users.db")
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE,
+            password TEXT
+        );
+    """)
+    conn.commit()
+    conn.close()
+
+def init_activity_db():
+    conn = sqlite3.connect("users.db")
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS activities (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            city TEXT,
+            station TEXT,
+            intervention TEXT,
+            efficiency REAL,
+            base_co2 REAL,
+            after_co2 REAL
+        );
+    """)
+    conn.commit()
+    conn.close()
+
+init_db()
+init_activity_db()
+
+
+# ----------------------- LOGIN / REGISTER ROUTES -----------------------
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    if request.method == "POST":
+        username = request.form["username"].strip()
+        password = request.form["password"].strip()
+
+        conn = sqlite3.connect("users.db")
+        cur = conn.cursor()
+
+        try:
+            cur.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, password))
+            conn.commit()
+        except sqlite3.IntegrityError:
+            conn.close()
+            return "Username already exists!"
+
+        conn.close()
+        return redirect(url_for("login"))
+
+    return render_template("register.html")
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    error = None
+
+    if request.method == "POST":
+        username = request.form["username"].strip()
+        password = request.form["password"].strip()
+
+        conn = sqlite3.connect("users.db")
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM users WHERE username=? AND password=?", (username, password))
+        user = cur.fetchone()
+        conn.close()
+
+        if user:
+            session["user"] = username
+            return redirect(url_for("index"))
+        else:
+            error = "Invalid username or password!"
+
+    return render_template("login.html", error=error)
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
 
 # ----------- Config -----------
 # Government CPCB feed with coordinates
@@ -40,10 +131,20 @@ GEN_LULC_CHOICES = [
     "Airport", "Sports Complex", "Government", "Mixed Forest"
 ]
 
+# ----------- Weather config -----------
+# Using Open-Meteo (no API key required) for simple current weather
+WEATHER_API_BASE = "https://api.open-meteo.com/v1/forecast"
+
+
 # ----------- Static files route -----------
 @app.route("/")
 def index():
-    return send_from_directory("static", "cesium_map.html")
+    # If logged in, go straight to your Cesium map
+    if "user" in session:
+        return send_from_directory("static", "cesium_map.html")
+    # Otherwise show the login page
+    return redirect(url_for("login"))
+
 
 @app.route("/<path:filename>")
 def static_files(filename):
@@ -260,6 +361,109 @@ def _parse_float(val):
     except ValueError:
         return None
 
+# ----------- Weather helpers -----------
+
+def get_city_coords(city_name: str):
+    """
+    Return (lat, lon) for a city by averaging all station coordinates in that city.
+    Used to query weather APIs at a city level.
+    """
+    if not city_name:
+        return None, None
+
+    city_stations = [
+        s for s in stations
+        if isinstance(s.get("city"), str) and s["city"].lower() == city_name.lower()
+    ]
+    if not city_stations:
+        return None, None
+
+    lat = sum(s["lat"] for s in city_stations) / len(city_stations)
+    lon = sum(s["lon"] for s in city_stations) / len(city_stations)
+    return lat, lon
+
+
+def get_month_factor(dt=None):
+    """
+    Very simple seasonal factor to illustrate 'monthly impact':
+    - Winter (Nov–Jan): higher pollution build-up  (1.25x)
+    - Shoulder (Oct, Feb): moderately higher       (1.15x)
+    - Pre-monsoon (Apr–Jun): better dispersion     (0.90x)
+    - Monsoon (Jul–Sep): slightly better           (0.95x)
+    - Other months: neutral                        (1.00x)
+    """
+    if dt is None:
+        dt = datetime.now()
+    m = dt.month
+
+    if m in (11, 12, 1):
+        return 1.25, "winter"
+    if m in (10, 2):
+        return 1.15, "shoulder"
+    if m in (4, 5, 6):
+        return 0.90, "pre-monsoon"
+    if m in (7, 8, 9):
+        return 0.95, "monsoon"
+    return 1.00, "neutral"
+
+
+def fetch_weather_for_city(city_name: str):
+    """
+    Query Open-Meteo for current weather near the city centroid.
+    Returns a dict with temperature, wind speed/direction, dispersion hint, etc.
+    """
+    lat, lon = get_city_coords(city_name)
+    if lat is None or lon is None:
+        return None
+
+    try:
+        params = {
+            "latitude": lat,
+            "longitude": lon,
+            "current_weather": True,
+            # you can add more (e.g. 'hourly': 'relativehumidity_2m') if needed
+        }
+        resp = requests.get(WEATHER_API_BASE, params=params, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as e:
+        print("[weather] fetch failed for city", city_name, ":", e)
+        return None
+
+    cw = data.get("current_weather") or {}
+
+    temp = cw.get("temperature")         # °C
+    windspeed = cw.get("windspeed")      # km/h
+    winddir = cw.get("winddirection")    # degrees
+    weather_code = cw.get("weathercode")
+
+    # Simple dispersion heuristic based on wind speed
+    dispersion = "Unknown"
+    if isinstance(windspeed, (int, float)):
+        if windspeed < 2:
+            dispersion = "Poor dispersion (very low wind)"
+        elif windspeed < 5:
+            dispersion = "Moderate dispersion"
+        else:
+            dispersion = "Good dispersion (high wind)"
+
+    month_factor, season_label = get_month_factor()
+
+    return {
+        "city": city_name,
+        "latitude": lat,
+        "longitude": lon,
+        "temperature": temp,
+        "windspeed": windspeed,
+        "winddirection": winddir,
+        "weather_code": weather_code,
+        "dispersion_label": dispersion,
+        "month_factor": month_factor,
+        "season": season_label,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
+
 # ----------- CPCB live refresh -----------
 def refresh_live_from_cpcb(timeout=15):
     """
@@ -435,6 +639,39 @@ def refresh_live_endpoint():
     """Manual trigger to refresh live estimates from CPCB."""
     ok = refresh_live_from_cpcb()
     return jsonify({"success": bool(ok)})
+
+@app.route("/get_weather", methods=["GET"])
+def get_weather():
+    """
+    Returns simple current weather + monthly factor for a given city.
+
+    Frontend usage example:
+      GET /get_weather?city=Delhi
+
+    Response example:
+    {
+      "city": "Delhi",
+      "temperature": 18.3,
+      "windspeed": 1.2,
+      "winddirection": 320,
+      "dispersion_label": "Poor dispersion (very low wind)",
+      "month_factor": 1.25,
+      "season": "winter",
+      "timestamp": "...",
+      "success": true
+    }
+    """
+    city = request.args.get("city")
+    if not city:
+        return jsonify({"success": False, "error": "city query parameter is required"}), 400
+
+    info = fetch_weather_for_city(city)
+    if not info:
+        return jsonify({"success": False, "error": f"No weather data for city '{city}'"}), 404
+
+    info["success"] = True
+    return jsonify(info)
+
 
 @app.route("/get_stations")
 def get_stations():
