@@ -1,22 +1,44 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Register</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Register</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="loginStyle.css">  
 </head>
 <body>
-    <h2>User Registration</h2>
 
-    <form method="POST">
-        <label>Username:</label>
-        <input type="text" name="username" required><br><br>
+  <div class="container">
+    <div class="card">
 
-        <label>Password:</label>
-        <input type="password" name="password" required><br><br>
+      <h1 class="card-title">User Registration</h1>
 
-        <button type="submit">Register</button>
-    </form>
+      <form method="POST" action="/register" autocomplete="off" class="Form">
 
-    <br>
-    <a href="/login">Already have an account? Login</a>
+        <label class="label" for="username">Username</label>
+        <input id="username" type="text" name="username" class="unI" placeholder="Choose a username" required>
+
+        <label class="label" for="password">Password</label>
+        <input id="password" type="password" name="password" class="psI" placeholder="Enter a strong password" required><br>
+
+        <label class="confirm" for="confirm">Confirm Password</label>
+        <input id="confirm" type="confirm" name="confirm" class="unI" placeholder="Enter Confirm Password" required>
+        
+        <label class="label" for="email">Email</label>
+        <input id="email" type="email" name="email" class="psI" placeholder="Enter Email ID" required>
+
+        <button type="submit" class="loginBtn">Register</button>
+
+        <div class="card-footer">
+            <a href="/login" class="link">Already have an account? Login</a>
+        </div>
+
+      </form>
+
+    </div>
+  </div>
+
 </body>
 </html>

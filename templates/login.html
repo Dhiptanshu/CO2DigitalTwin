@@ -1,24 +1,41 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
+
 <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Login</title>
+
+    <!-- Optional: nicer font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="loginStyle.css">
 </head>
+
 <body>
 
-    <h2>User Login</h2>
+    <div class="container">
+        <div class="card">
+            <h1 class="card-title">Welcome back</h1>
 
-    <form method="POST">
-        <label>Username:</label>
-        <input type="text" name="username" required><br><br>
+            <form method="POST" action="/login" class="Form" autocomplete="off">
+                <label class="label" for="username">Username</label>
+                <input id="username" type="text" name="username" class="unI" placeholder="Enter your username">
 
-        <label>Password:</label>
-        <input type="password" name="password" required><br><br>
+                <label class="label" for="password">Password</label>
+                <input id="password" type="password" name="password" class="psI" placeholder="Enter your password">
 
-        <button type="submit">Login</button>
-    </form>
+                <button type="submit" class="loginBtn">Log in</button>
 
-    <br>
-    <a href="/register">Create new account</a>
+                <div class="card-footer">
+                    <a href="#" class="link">Forgot password?</a>
+                    <span class="divider">•</span>
+                    <a href="/register" class="link">Register Now</a>
+                </div>
+            </form>
+        </div>
+    </div>
 
 </body>
+
 </html>

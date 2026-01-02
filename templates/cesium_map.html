@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <title>India CO₂ Dashboard</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/cesium@1.125/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0B1120">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+  <!-- External stylesheet -->
+  <link rel="stylesheet" href="styles.css">
+
+  <!-- Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/cesium@1.125/Build/Cesium/Cesium.js"></script>
+  <script src="https://cdn.plot.ly/plotly-2.26.2.min.js"></script>
+
+  <style>
+    /* Left control panel layout */
+    #controls {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+
+    /* Vertical three buttons */
+    .control-tab-bar {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+
+    .control-tab-btn {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: none;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+      background: #111827;
+      color: #e5e7eb;
+      text-align: left;
+    }
+
+    .control-tab-btn.active {
+      background: #0ea5e9;
+      color: #0b1120;
+    }
+
+    .controls-section {
+      display: none;
+      margin-top: 4px;
+    }
+
+    /* CO₂ Levels + Sector Mix on same row */
+    .card-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-top: 16px;
+      width: 100%;
+    }
+
+    .card-row .card {
+      flex: 1 1 0;
+    }
+
+    /* Heatmap row below */
+    #heatmapCard {
+      margin-top: 16px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <header>
+    <div class="title-block">
+      <h1><span class="dot"></span>CO2 Matrix: India CO₂ Monitoring &amp; Planning Tool</h1>
+      <small>Interactive national view for CO₂ planning and interventions.</small>
+    </div>
+    <span class="tag">Live Scenario Sandbox</span>
+  </header>
+
+  <div id="main">
+    <!-- LEFT SIDEBAR -->
+    <div id="controls">
+
+      <!-- 3 main buttons -->
+      <div class="control-tab-bar">
+        <button class="control-tab-btn" data-target="interventionSection">
+          Intervention Settings
+        </button>
+        <button class="control-tab-btn" data-target="manipulateSection">
+          Manipulate Factors
+        </button>
+        <button class="control-tab-btn" data-target="reportSection">
+          Report Scope
+        </button>
+      </div>
+
+      <!-- INTERVENTION SETTINGS -->
+      <div id="interventionSection" class="controls-section">
+        <h3>Intervention Settings</h3>
+        <p class="sub">Configure city, station &amp; efficiency to simulate impact.</p>
+
+        <div class="chip-row">
+          <span class="chip">Real-time Map</span>
+          <span class="chip">Urban Planning</span>
+        </div>
+
+        <label for="citySearch">Select City</label>
+        <div class="city-search-wrapper">
+          <input type="text" id="citySearch" placeholder="Type to search city..." autocomplete="off" />
+          <div id="citySearchSuggestions" class="city-search-suggestions"></div>
+        </div>
+
+        <div class="chip-row" id="cityRecommendations" style="display:none; margin-top:4px;"></div>
+
+        <select id="citySelect"></select>
+
+        <label for="stationSelect">Choose Station</label>
+        <select id="stationSelect"></select>
+
+        <label for="methodSelect">Select Intervention</label>
+        <select id="methodSelect">
+          <option>Roadside Capture Unit</option>
+          <option>Vertical Garden</option>
+          <option>Biofilter</option>
+        </select>
+
+        <label class="toggle-inline" style="margin-top:12px;">
+          <input type="checkbox" id="dispersionToggle">
+          <span>Show dispersion plume</span>
+        </label>
+
+        <label for="displayMode">Display</label>
+        <div class="segmented" id="displayMode">
+          <label><input type="radio" name="display" value="baseline" checked> Baseline</label>
+          <label><input type="radio" name="display" value="live"> Live</label>
+          <label><input type="radio" name="display" value="both"> Both</label>
+        </div>
+
+        <label for="reductionInput">Efficiency (%)</label>
+        <input type="number" id="reductionInput" value="20" min="0" max="50">
+
+        <button id="applyBtn">Apply Intervention</button>
+
+        <label for="colorMode">Color coding</label>
+        <select id="colorMode">
+          <option value="co2" selected>CO₂ intensity</option>
+          <option value="sector">Dominant sector</option>
+        </select>
+      </div>
+
+      <!-- MANIPULATE FACTORS -->
+      <div id="manipulateSection" class="controls-section">
+        <div class="manipulate-header">
+          <h4>Manipulate Factors</h4>
+          <button id="playModeBtn" class="play-toggle-btn">
+            ▶ Play
+          </button>
+          <label>Efficiency (%)</label>
+          <input type="number" id="playReductionInput" min="0" max="50">
+          <label>Color coding</label>
+          <select id="playColorMode">
+            <option value="co2">CO₂ intensity</option>
+            <option value="sector">Dominant sector</option>
+          </select>
+
+        </div>
+
+        <div id="playPanel" class="play-panel hidden">
+          <h5 class="play-panel-title">Play Mode — Override Factors</h5>
+
+          <div class="play-grid">
+            <div class="play-field">
+              <label for="playNdviInput">NDVI</label>
+              <input type="number" id="playNdviInput" step="0.01" min="0" max="1" />
+            </div>
+
+            <div class="play-field">
+              <label for="playAlbedoInput">Albedo</label>
+              <input type="number" id="playAlbedoInput" step="0.01" min="0" max="1" />
+            </div>
+
+            <div class="play-field">
+              <label for="playLulcInput">LULC</label>
+              <select id="playLulcInput">
+                <option value="">(use station LULC)</option>
+                <option>Urban</option>
+                <option>Industrial</option>
+                <option>Residential</option>
+                <option>Campus</option>
+                <option>Rural</option>
+                <option>Mixed Urban</option>
+                <option>Industrial/Residential</option>
+                <option>Urban Vegetation</option>
+                <option>Airport</option>
+                <option>Sports Complex</option>
+                <option>Government</option>
+                <option>Mixed Forest</option>
+              </select>
+            </div>
+
+            <div class="play-field">
+              <label for="playTempInput">Avg temperature (°C)</label>
+              <input type="number" id="playTempInput" step="0.1" />
+            </div>
+
+            <div class="play-field">
+              <label for="playWindInput">Wind speed (m/s)</label>
+              <input type="number" id="playWindInput" step="0.1" />
+            </div>
+
+            <div class="play-field">
+              <label for="playMixingInput">Mixing height (m)</label>
+              <input type="number" id="playMixingInput" step="10" />
+            </div>
+
+            <div class="play-field">
+              <label for="playStagInput">Stagnation risk</label>
+              <select id="playStagInput">
+                <option value="">(use model)</option>
+                <option>High</option>
+                <option>Elevated</option>
+                <option>Moderate</option>
+                <option>Low</option>
+              </select>
+            </div>
+
+            <div class="play-actions">
+              <button id="playApplyBtn" class="play-apply-btn">
+                Apply to efficiency
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- REPORT SCOPE -->
+      <div id="reportSection" class="controls-section">
+        <button id="startReportBtn">Start Reporting</button>
+
+        <label for="reportScope">Report Scope</label>
+        <select id="reportScope">
+          <option value="city">Current city only</option>
+          <option value="session">All cities this session</option>
+        </select>
+
+        <button id="downloadReportBtn" disabled>Download Report</button>
+
+        <button id="shareReportBtn" class="btn" disabled>
+          Share Report
+        </button>
+      </div>
+
+    </div>
+
+    <!-- RIGHT MAIN DASHBOARD -->
+    <div id="dashboard">
+      <!-- MAP CARD -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-header-title">3D National Context</div>
+          <div class="card-header-meta">Cesium terrain · CO₂ hotspots</div>
+        </div>
+
+        <div id="cesiumContainer"></div>
+
+        <div class="legend">
+          <div class="legend-item"><span class="legend-color legend-low"></span> ≤420 ppm</div>
+          <div class="legend-item"><span class="legend-color legend-mid"></span> 421–450 ppm</div>
+          <div class="legend-item"><span class="legend-color legend-high"></span> >450 ppm</div>
+          <div class="legend-item"><span class="legend-color legend-na"></span> No data</div>
+        </div>
+      </div>
+
+      <!-- DECISION SUPPORT BELOW MAP -->
+      <div class="card" id="summaryCard">
+        <div class="card-inner-header">
+          <div class="card-inner-title">Decision Support Overview</div>
+          <span class="pill">City Snapshot</span>
+        </div>
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-label">Selected City</div>
+            <div class="kpi-value" id="kpiCity">–</div>
+            <div class="kpi-sub" id="kpiStations">0 monitoring stations</div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-label">Average CO₂</div>
+            <div class="kpi-value" id="kpiAvg">–</div>
+            <div class="kpi-sub">Across active stations</div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-label">Worst Hotspot</div>
+            <div class="kpi-value" id="kpiMax">–</div>
+            <div class="kpi-sub" id="kpiMaxStation">–</div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-label">CO₂ Reduction</div>
+            <div class="kpi-value" id="kpiReduction">0 ppm</div>
+            <div class="kpi-sub">Total drop vs. baseline today</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ROW: CO₂ LEVELS (LEFT) + SECTOR MIX (RIGHT) -->
+      <div class="card-row">
+        <div class="card">
+          <div class="card-inner-header">
+            <div class="card-inner-title">CO₂ Levels</div>
+            <span class="pill">Baseline vs Live</span>
+          </div>
+          <div id="barChart" style="height:360px;"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-inner-header">
+            <div class="card-inner-title">Sectoral Emission Mix</div>
+            <span class="pill">Inference from LULC</span>
+          </div>
+          <div id="sectorChart" style="height:280px;"></div>
+        </div>
+      </div>
+
+      <!-- HEATMAP BELOW THEM -->
+      <div class="card" id="heatmapCard">
+        <div class="card-inner-header">
+          <div class="card-inner-title">CO₂ Heatmap</div>
+          <span class="pill">Stations × Baseline vs Live</span>
+        </div>
+        <div id="heatmapChart" style="height:320px;"></div>
+      </div>
+
+      <!-- WEATHER & STATION TABLE (unchanged layout after that) -->
+      <div class="card" id="weatherCard">
+        <div class="card-inner-header">
+          <div class="card-inner-title">Weather &amp; Seasonal Impact</div>
+          <span class="pill">Monthly Pattern</span>
+        </div>
+
+        <div class="weather-header-row">
+          <div class="weather-select-group">
+            <label for="weatherMonth" class="weather-label">Month</label>
+            <select id="weatherMonth">
+              <option value="auto" selected>Auto (based on city)</option>
+              <option value="1">January (winter)</option>
+              <option value="2">February</option>
+              <option value="3">March</option>
+              <option value="4">April</option>
+              <option value="5">May (summer peak)</option>
+              <option value="6">June</option>
+              <option value="7">July</option>
+              <option value="8">August</option>
+              <option value="9">September</option>
+              <option value="10">October</option>
+              <option value="11">November (early winter)</option>
+              <option value="12">December (winter)</option>
+            </select>
+          </div>
+
+          <div class="weather-current">
+            <div class="weather-main" id="weatherSummary">Select a city</div>
+            <div class="weather-sub" id="weatherMeta">
+              Winters in north India often show higher CO₂ / pollution due to low wind &amp; mixing height.
+            </div>
+          </div>
+        </div>
+
+        <div class="weather-metrics-row">
+          <div class="weather-metric">
+            <div class="weather-metric-label">Avg Temperature</div>
+            <div class="weather-metric-value" id="weatherTemp">–</div>
+            <div class="weather-metric-sub">°C</div>
+          </div>
+          <div class="weather-metric">
+            <div class="weather-metric-label">Wind Speed</div>
+            <div class="weather-metric-value" id="weatherWind">–</div>
+            <div class="weather-metric-sub">m/s</div>
+          </div>
+          <div class="weather-metric">
+            <div class="weather-metric-label">Mixing Height</div>
+            <div class="weather-metric-value" id="weatherMixing">–</div>
+            <div class="weather-metric-sub">m</div>
+          </div>
+          <div class="weather-metric">
+            <div class="weather-metric-label">Stagnation Risk</div>
+            <div class="weather-metric-badge" id="weatherStagnation">–</div>
+          </div>
+        </div>
+
+        <div id="monthlyChart" class="weather-monthly-chart"></div>
+      </div>
+
+      <div class="card" id="stationTableCard">
+        <div class="card-inner-header">
+          <div class="card-inner-title">Station Snapshot</div>
+          <span class="pill">Tabular View</span>
+        </div>
+        <div id="table"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const tabButtons = document.querySelectorAll('.control-tab-btn');
+      const sections = document.querySelectorAll('.controls-section');
+
+      function closeAll() {
+        sections.forEach(sec => sec.style.display = 'none');
+        tabButtons.forEach(btn => btn.classList.remove('active'));
+      }
+
+      tabButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const targetId = btn.dataset.target;
+          const targetSection = document.getElementById(targetId);
+          const isOpen = targetSection.style.display === 'block';
+
+          // close everything first
+          closeAll();
+
+          // toggle logic
+          if (!isOpen) {
+            targetSection.style.display = 'block';
+            btn.classList.add('active');
+          }
+          // if isOpen === true → stays closed
+        });
+      });
+
+      // start fully collapsed
+      closeAll();
+    });
+  </script>
+
+
+  <script>
+    // Inject key from backend
+    Cesium.Ion.defaultAccessToken = "{{ cesium_token }}";
+  </script>
+  <script src="script.js"></script>
+</body>
+
+</html>

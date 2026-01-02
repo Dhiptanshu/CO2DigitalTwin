@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        /* Background Gradient */
+        body {
+            margin: 0;
+            font-family: "Inter", sans-serif;
+            background: linear-gradient(135deg, #0f0f23, #12122e, #0a0a1a);
+            min-height: 100vh;
+            padding-bottom: 40px;
+            color: #ffffff;
+        }
+
+        /* Title */
+        .header {
+            text-align: center;
+            padding-top: 40px;
+            font-size: 42px;
+            font-weight: 700;
+            color: #66f3ff;
+            text-shadow: 0 0 10px rgba(102, 243, 255, 0.7);
+        }
+
+        /* Card Container */
+        .card {
+            margin: 40px auto;
+            width: 92%;
+            max-width: 1250px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 18px;
+            padding: 30px;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.15);
+        }
+
+        .card h2 {
+            margin-top: 0;
+            font-size: 26px;
+            color: #9cf3ff;
+        }
+
+        /* Table Styling */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 18px;
+            font-size: 15px;
+        }
+
+        th, td {
+            padding: 14px 12px;
+            text-align: center;
+        }
+
+        th {
+            background: rgba(102, 243, 255, 0.15);
+            color: #66f3ff;
+            text-transform: uppercase;
+            font-size: 13px;
+            letter-spacing: 1px;
+        }
+
+        tr {
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        tr:nth-child(even) {
+            background: rgba(255,255,255,0.05);
+        }
+
+        tr:hover {
+            background: rgba(102, 243, 255, 0.12);
+            transition: 0.25s;
+        }
+
+        /* Logout Button */
+        .logout-btn {
+            margin-top: 20px;
+            display: inline-block;
+            padding: 10px 20px;
+            background: #ff4d6d;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: 0.2s;
+        }
+
+        .logout-btn:hover {
+            background: #ff3358;
+        }
+    </style>
+
+</head>
+<body>
+
+    <div class="header">Admin Dashboard</div>
+
+    <div class="card">
+        <h2>Activity Logs</h2>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>User ID</th>
+                    <th>City</th>
+                    <th>Station</th>
+                    <th>Intervention</th>
+                    <th>Efficiency (%)</th>
+                    <th>CO₂ Before</th>
+                    <th>CO₂ After</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for a in activities %}
+                <tr>
+                    <td>{{ a["id"] }}</td>
+                    <td>{{ a["user_id"] }}</td>
+                    <td>{{ a["city"] }}</td>
+                    <td>{{ a["station"] }}</td>
+                    <td>{{ a["intervention"] }}</td>
+                    <td>{{ a["efficiency"] }}</td>
+                    <td>{{ a["base_co2"] }}</td>
+                    <td>{{ a["after_co2"] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+    </div>
+
+</body>
+</html>

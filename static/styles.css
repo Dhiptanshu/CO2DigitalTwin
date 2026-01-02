@@ -743,3 +743,259 @@ tbody tr:hover {
     width: 100%;
   }
 }
+
+#shareReportBtn {
+  background-color: #0ea5e9; /* Sky blue */
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.2s ease-in-out;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#shareReportBtn:hover:not(:disabled) {
+  background-color: #0284c7; /* darker blue */
+  transform: translateY(-1px);
+}
+
+#shareReportBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+
+.manipulate-header {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+
+.play-toggle-btn {
+  padding: 0.25rem 0.75rem;
+  font-size: 0.85rem;
+  border-radius: 999px;
+  border: 1px solid #4b5563;
+  background: #020617;
+  color: #e5e7eb;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-family: inherit;
+  letter-spacing: 0.2px;
+}
+
+.play-toggle-btn.active {
+  background: #22c55e22;
+  border-color: #22c55e;
+  color: #bbf7d0;
+}
+
+.play-panel {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 0.75rem;
+  background: rgba(15,23,42,0.9);
+  border: 1px solid rgba(75,85,99,0.6);
+}
+
+.play-panel.hidden {
+  display: none;
+}
+
+.play-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+
+.play-field label {
+  display: block;
+  font-size: 0.75rem;
+  color: #9ca3af;
+  margin-bottom: 0.15rem;
+}
+
+.play-field input,
+.play-field select {
+  width: 100%;
+  font-size: 0.85rem;
+  padding: 0.25rem 0.4rem;
+  border-radius: 0.5rem;
+  border: 1px solid #4b5563;
+  background: #020617;
+  color: #e5e7eb;
+}
+
+.pulse-eff {
+  outline: 2px solid #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56,189,248,0.4);
+  transition: box-shadow 0.2s ease, outline 0.2s ease;
+}
+
+/* PLAY MODE APPLY BUTTON */
+.play-apply-btn {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 10px 16px;
+  width: 100%;
+  text-align: center;
+
+  background: linear-gradient(135deg, #0ea5e9, #0369a1);
+  border: none;
+  border-radius: 8px;
+
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+
+  transition: 0.18s ease-in-out;
+  box-shadow: 0 3px 8px rgba(14, 165, 233, 0.35);
+}
+
+.play-apply-btn:hover {
+  background: linear-gradient(135deg, #38bdf8, #0284c7);
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.5);
+}
+
+.play-apply-btn:active {
+  transform: scale(0.97);
+}
+
+/* Pulse animation when efficiency updates */
+.pulse-eff {
+  animation: pulse-eff 0.4s ease-out;
+}
+
+@keyframes pulse-eff {
+  0%   { box-shadow: 0 0 0 0 rgba(14, 165, 233, 0.8); }
+  100% { box-shadow: 0 0 0 12px rgba(14, 165, 233, 0); }
+}
+
+/* ---------- Themed toast alerts ---------- */
+.toast-container {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none; /* clicks pass through except on toasts */
+}
+
+.toast {
+  min-width: 260px;
+  max-width: 360px;
+  background: rgba(15, 23, 42, 0.96); /* slate-900 */
+  color: #e5e7eb; /* gray-200 */
+  border-radius: 0.75rem;
+  padding: 10px 14px;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.75);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  font-size: 13px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  backdrop-filter: blur(12px);
+  pointer-events: auto; /* allow close button click */
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity 0.18s ease-out, transform 0.18s ease-out;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.toast-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+.toast-content {
+  flex: 1;
+}
+
+.toast-title {
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.toast-message {
+  opacity: 0.9;
+}
+
+.toast-close {
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+  margin-left: 4px;
+}
+
+.toast-close:hover {
+  color: #e5e7eb;
+}
+
+/* Variants */
+.toast--info .toast-icon {
+  background: rgba(56, 189, 248, 0.2);
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.7);
+}
+
+.toast--success .toast-icon {
+  background: rgba(34, 197, 94, 0.2);
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.7);
+}
+
+.toast--warning .toast-icon {
+  background: rgba(234, 179, 8, 0.15);
+  box-shadow: 0 0 0 1px rgba(234, 179, 8, 0.8);
+}
+
+.toast--error .toast-icon {
+  background: rgba(248, 113, 113, 0.2);
+  box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.85);
+}
+
+/* --- Normalize report action buttons --- */
+#downloadReportBtn,
+#shareReportBtn {
+  width: 100%;          /* same width */
+  padding: 10px 16px;   /* unified padding */
+  border-radius: 999px; /* same shape */
+  text-align: center;   /* align text */
+  box-sizing: border-box;
+}
+
+
+#downloadReportBtn { margin-top: 6px; }
+#shareReportBtn { margin-top: 6px; }
+
+#startReportBtn {
+  width: 100%;
+  padding: 10px 16px;
+  border-radius: 999px;
+  box-sizing: border-box;
+}
