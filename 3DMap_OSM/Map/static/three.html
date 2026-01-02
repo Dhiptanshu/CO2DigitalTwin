@@ -163,8 +163,8 @@ loader.load(
     const centeredBox = new THREE.Box3().setFromObject(model);
     const size = centeredBox.getSize(new THREE.Vector3());
 
-    // Place camera initially above city
-    camera.position.set(0, size.y + 300, size.z + 800);
+    // Place camera initially closer for fly-through feel
+    camera.position.set(0, 150, 400);
 
     // Use centered box for markers
     addStationMarkers(centeredBox);
