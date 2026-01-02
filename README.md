@@ -2,6 +2,10 @@
 
 A 3D interactive dashboard for monitoring and simulating CO2 levels across India. This application leverages CesiumJS for 3D geospatial visualization, providing real time and baseline data analysis to support urban planning and environmental interventions.
 
+> **Smart India Hackathon 2025 – Grand Finale**
+>
+> Developed in response to **Problem Statement ID 25222**, presented by the **Department of Science and Technology, Ministry of Science and Technology**.
+
 ## Overview
 
 The CO2 Digital Twin provides a comprehensive view of CO2 data, combining varying sources:
