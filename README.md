@@ -21,7 +21,7 @@ The CO2 Digital Twin provides a comprehensive view of CO2 data, combining varyin
 *   **Database**: SQLite (`users.db`, `activities.db`).
 *   **Data Processing**: Pandas, NumPy.
 *   **Satellite Data**: Google Earth Engine (MODIS/Landsat).
-*   **Weather Data**: OpenWeatherMap API.
+*   **Weather Data**: OpenWeatherMap API, CPCB (Central Pollution Control Board).
 *   **Reporting**: ReportLab (PDF Generation).
 
 ## Features
