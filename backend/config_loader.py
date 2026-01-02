@@ -1,4 +1,5 @@
 import os
+import io
 from cryptography.fernet import Fernet
 from dotenv import load_dotenv
 
@@ -26,10 +27,6 @@ def load_config():
                 encrypted_data = file.read()
             
             decrypted_data = f.decrypt(encrypted_data).decode("utf-8")
-            
-            # Parse lines and set env vars
-            import io
-            from dotenv import load_dotenv
             
             # We can use load_dotenv with stream
             load_dotenv(stream=io.StringIO(decrypted_data))
