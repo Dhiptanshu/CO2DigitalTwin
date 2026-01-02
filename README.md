@@ -53,8 +53,7 @@ The CO2 Digital Twin provides a comprehensive view of CO2 data, combining varyin
     ```bash
     pip install -r requirements.txt
     ```
-    ```
-    *(Note: This installs all core dependencies including `flask`, `pandas`, `reportlab` (for PDFs), and `earthengine-api` (for satellite data tools).)*
+    *Note: This installs all core dependencies including `flask`, `pandas`, `reportlab` (for PDFs), and `earthengine-api` (for satellite data tools).*
 
 3.  **Environment Configuration:**
     The application automatically loads configuration from a `.env` file. Ensure this file contains:
@@ -149,6 +148,27 @@ A high-fidelity, first-person view of the city (Delhi) using detailed 3D buildin
 
 4.  **Explore**:
     Open your browser and navigate to `http://127.0.0.1:5000`. Click on the screen to lock the mouse and use WASD keys to fly around.
+
+### Troubleshooting: Model Loading Error
+
+If you see an error like `SyntaxError: Unexpected token 'v', "version ht"...` in the console and the model fails to load, it means the `new_delhi_india_city_and_urban.glb` file is a **Git LFS pointer file** (text) instead of the actual 3D model. This happens if Git LFS was not installed or properly initialized during the clone.
+
+**Solution:**
+
+You must download the actual binary file (~115 MB).
+
+**Method 1: Using Git LFS (Recommended)**
+Open your terminal in the project root and run:
+```bash
+git lfs install
+git lfs pull
+```
+
+**Method 2: Manual Download (Powershell)**
+If `git lfs` fails or is not available, you can download the file directly using PowerShell:
+```powershell
+Invoke-WebRequest -Uri "https://github.com/Dhiptanshu/CO2DigitalTwin/raw/main/3DMap_OSM/Map/models/new_delhi_india_city_and_urban.glb" -OutFile "3DMap_OSM\Map\models\new_delhi_india_city_and_urban.glb"
+```
 
 ## Security & Integrity
 
