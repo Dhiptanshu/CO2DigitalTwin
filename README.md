@@ -68,7 +68,9 @@ The CO2 Digital Twin provides a comprehensive view of CO2 data, combining varyin
     ```bash
     python app.py
     ```
-2.  **Access the Dashboard:**
+    *This starts the web server for the main application, including the 3D visualization.*
+
+2.  **Access the Dashboard (3D Map):**
     Open your browser and navigate to `http://127.0.0.1:5000`.
 
 ### Remote Access via Ngrok

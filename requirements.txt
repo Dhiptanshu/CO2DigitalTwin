@@ -1,0 +1,8 @@
+flask
+flask-cors
+pandas
+cryptography
+python-dotenv
+requests
+earthengine-api
+numpy
