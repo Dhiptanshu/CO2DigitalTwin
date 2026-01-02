@@ -6,7 +6,7 @@ A 3D interactive dashboard for monitoring and simulating CO2 levels across India
 
 The CO2 Digital Twin provides a comprehensive view of CO2 data, combining varying sources:
 *   **Baseline Data**: Historic sensor data.
-*   **Satellite Data**: NDVI (Normalized Difference Vegetation Index) and Albedo data fetched from Google Earth Engine.
+*   **Satellite Data**: NDVI (Normalized Difference Vegetation Index), Albedo, and LULC (Land Use Land Cover) data. *Note: This data is derived from Google Earth Engine but used as static files in this repository.*
 *   **Live Simulation**: Interactive manipulation of environmental factors to simulate CO2 reduction strategies.
 
 ## Tools & Technologies
@@ -42,12 +42,13 @@ The CO2 Digital Twin provides a comprehensive view of CO2 data, combining varyin
     git clone <repository_url>
     cd <repository_directory>
     ```
+    *Alternatively, you can download the repository as a ZIP file and extract it.*
 
 2.  **Install dependencies:**
     ```bash
     pip install -r requirements.txt
     ```
-    *(Note: Ensure you have `flask`, `pandas`, `cryptography`, `python-dotenv`, `requests`, `earthengine-api` installed)*
+    *(Note: Ensure you have `flask`, `pandas`, `cryptography`, `python-dotenv`, `requests` installed. `earthengine-api` is OPTIONAL and only needed if you want to use the script in `tools/` to fetch new data.)*
 
 3.  **Environment Configuration:**
     The application automatically loads configuration from a `.env` file. Ensure this file contains:
@@ -109,6 +110,39 @@ A separate administrative interface tracks user interventions and reported activ
 
 2.  **Access the Dashboard:**
     Open your browser and navigate to `http://127.0.0.1:5001`.
+
+## Future Scope: 3D City Map (OSM)
+
+*Note: This feature is currently a standalone prototype and is not integrated into the main dashboard.*
+
+A high-fidelity, first-person view of the city (Delhi) using detailed 3D building models derived from OpenStreetMap (OSM) data.
+
+### Features
+*   **Fly-through Mode**: Navigate the city in first-person view using WASD + Mouse (FPS style).
+*   **Detailed Geometry**: Renders actual building shapes and heights using GLB models.
+*   **Station markers**: Visualizes pollution monitoring stations as markers within the context of the 3D city model.
+
+### Technologies Used
+*   **Frontend**: Three.js (WebGL renderer), PointerLockControls (Navigation).
+*   **Backend**: Flask (Separate instance for serving models).
+*   **Data Source**: OpenStreetMap (OSM) converted to GLB format (`new_delhi_india_city_and_urban.glb`).
+
+### How to Run
+1.  **Stop the Main Application**:
+    Since this prototype also uses port 5000, ensure the main `app.py` is stopped.
+
+2.  **Navigate to the Directory**:
+    ```bash
+    cd 3DMap_OSM/Map
+    ```
+
+3.  **Start the Server**:
+    ```bash
+    python app.py
+    ```
+
+4.  **Explore**:
+    Open your browser and navigate to `http://127.0.0.1:5000`. Click on the screen to lock the mouse and use WASD keys to fly around.
 
 ## Security & Integrity
 

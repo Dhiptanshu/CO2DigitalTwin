@@ -4,5 +4,4 @@ pandas
 cryptography
 python-dotenv
 requests
-earthengine-api
 numpy
