@@ -22,6 +22,7 @@ The CO2 Digital Twin provides a comprehensive view of CO2 data, combining varyin
 *   **Data Processing**: Pandas, NumPy.
 *   **Satellite Data**: Google Earth Engine (MODIS/Landsat).
 *   **Weather Data**: OpenWeatherMap API.
+*   **Reporting**: ReportLab (PDF Generation).
 
 ## Features
 
@@ -52,7 +53,8 @@ The CO2 Digital Twin provides a comprehensive view of CO2 data, combining varyin
     ```bash
     pip install -r requirements.txt
     ```
-    *(Note: Ensure you have `flask`, `pandas`, `cryptography`, `python-dotenv`, `requests` installed. `earthengine-api` is OPTIONAL and only needed if you want to use the script in `tools/` to fetch new data.)*
+    ```
+    *(Note: This installs all core dependencies including `flask`, `pandas`, `reportlab` (for PDFs), and `earthengine-api` (for satellite data tools).)*
 
 3.  **Environment Configuration:**
     The application automatically loads configuration from a `.env` file. Ensure this file contains:
@@ -162,4 +164,4 @@ A high-fidelity, first-person view of the city (Delhi) using detailed 3D buildin
 *   `static/`: CSS, JavaScript, and asset files.
 *   `templates/`: HTML templates (Jinja2).
 *   `encrypted/`: Encrypted dataset files.
-*   `tools/`: Utility scripts for data encryption (`encrypt_datasets.py`) and fetching satellite data (`get_station_env_factors.py`).
+*   `tools/`: Utility scripts for data encryption (`encrypt_datasets.py`) and fetching satellite data from Google Earth Engine (`get_station_env_factors.py`).
